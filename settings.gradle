@@ -1,0 +1,21 @@
+pluginManagement {
+  repositories {
+    gradlePluginPortal()
+    maven { url "https://maven.fabricmc.net/" }
+    maven { url "https://maven.neoforged.net/releases" }
+    maven { url "https://papermc.io/repo/repository/maven-public/" }
+  }
+}
+
+rootProject.name = 'dynmap-common'
+
+
+include ':dynmap-api'
+include ':DynmapCore'
+include ':DynmapCoreAPI'
+include ':neoforge-1.21.1'
+
+project(':dynmap-api').projectDir = "$rootDir/dynmap-api" as File
+project(':DynmapCore').projectDir = "$rootDir/DynmapCore" as File
+project(':DynmapCoreAPI').projectDir = "$rootDir/DynmapCoreAPI" as File
+project(':neoforge-1.21.1').projectDir = "$rootDir/neoforge-1.21.1" as File
