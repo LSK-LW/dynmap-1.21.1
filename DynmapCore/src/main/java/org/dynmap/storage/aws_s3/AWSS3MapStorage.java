@@ -133,115 +133,100 @@ public class AWSS3MapStorage extends MapStorage {
 
         @Override
         public TileRead read() {
-        	S3Client s3 = null;
-        	try {
-        		s3 = getConnection();
-        		GetObjectRequest req = GetObjectRequest.builder().bucketName(bucketname).key(baseKey).build();
-    			ResponseBytes<GetObjectResponse> obj = s3.getObjectAsBytes(req);
-    			if (obj != null) {
-    				GetObjectResponse rsp = obj.getResponse();
-                    TileRead tr = new TileRead();
-                    byte[] buf = obj.getBytes();
-                    if (buf == null) { return null; }
-                	tr.image = new BufferInputStream(buf);
-                    tr.format = ImageEncoding.fromContentType(rsp.getContentType());
-                    Map<String, String> meta = rsp.getMetadata();
-                    String v = meta.get("x-dynmap-hash");
-                    if (v != null) {
-                    	tr.hashCode = Long.parseLong(v, 16);
+            int retries = 3;
+            while (retries > 0) {
+                S3Client s3 = null;
+                try {
+                    s3 = getConnection();
+                    GetObjectRequest req = GetObjectRequest.builder()
+                            .bucketName(bucketname).key(baseKey).build();
+                    ResponseBytes<GetObjectResponse> obj = s3.getObjectAsBytes(req);
+                    if (obj != null) {
+                        GetObjectResponse rsp = obj.getResponse();
+                        TileRead tr = new TileRead();
+                        byte[] buf = obj.getBytes();
+                        if (buf == null) { return null; }
+                        tr.image = new BufferInputStream(buf);
+                        tr.format = ImageEncoding.fromContentType(rsp.getContentType());
+                        Map<String, String> meta = rsp.getMetadata();
+                        String v = meta.get("x-dynmap-hash");
+                        if (v != null) { tr.hashCode = Long.parseLong(v, 16); }
+                        v = meta.get("x-dynmap-ts");
+                        if (v != null) { tr.lastModified = Long.parseLong(v); }
+                        return tr;
                     }
-                    v = meta.get("x-dynmap-ts");
-                    if (v != null) {
-                    	tr.lastModified = Long.parseLong(v);
+                    return null;
+                } catch (NoSuchKeyException nskx) {
+                    return null; // 文件不存在，正常情况
+                } catch (java.io.UncheckedIOException netEx) {
+                    retries--;
+                    Log.severe("[S3] READ 断连，剩余重试次数: " + retries + " key=" + baseKey, netEx);
+                    s3 = null;
+                    if (retries > 0) {
+                        try { Thread.sleep(500); } catch (InterruptedException ie) { break; }
                     }
-                    return tr;
-    			}
-        	} catch (NoSuchKeyException nskx) {
-        		return null;	// Nominal case if it doesn't exist
-            } catch (S3Exception x) {
-        		Log.severe("AWS Exception", x);
-            } catch (StorageShutdownException x) {
-        	} finally {
-        		releaseConnection(s3);
-        	}
-        	return null;
+                } catch (StorageShutdownException x) {
+                    break;
+                } catch (S3Exception x) {
+                    Log.severe("[S3] READ FAILED: " + baseKey, x);
+                    break;
+                } finally {
+                    releaseConnection(s3);
+                }
+            }
+            return null;
         }
 
-
         @Override
-        public boolean write(long hash,
-                             BufferOutputStream encImage,
-                             long timestamp) {
-
+        public boolean write(long hash, BufferOutputStream encImage, long timestamp) {
             boolean done = false;
-            S3Client s3 = null;
+            int retries = 3;
 
-            try {
+            while (!done && retries > 0) {
+                S3Client s3 = null;
+                try {
+                    s3 = getConnection();
 
-               // Log.info("[S3] 当前处理: " + baseKey);
+                    if (encImage == null) {
+                        DeleteObjectRequest req = DeleteObjectRequest.builder()
+                                .bucketName(bucketname)
+                                .key(baseKey)
+                                .build();
+                        s3.deleteObject(req);
+                        AWSS3MapStorage.this.tileHashCache.remove(baseKey);
+                    } else {
+                        PutObjectRequest req = PutObjectRequest.builder()
+                                .bucketName(bucketname)
+                                .key(baseKey)
+                                .contentType(map.getImageFormat().getEncoding().getContentType())
+                                .addMetadata("x-dynmap-hash", Long.toHexString(hash))
+                                .addMetadata("x-dynmap-ts", Long.toString(timestamp))
+                                .build();
+                        s3.putObject(req, RequestBody.fromBytes(encImage.buf));
+                        AWSS3MapStorage.this.tileHashCache.put(baseKey, hash);
+                    }
+                    done = true;
 
-                s3 = getConnection();
-
-                if (encImage == null) {
-                    AWSS3MapStorage.this.tileHashCache.remove(baseKey);
-                        if (zoom == 0) {
-                            world.enqueueZoomOutUpdate(this);
-                        }
-
-                 //   Log.info("[S3] DELETE: " + baseKey);
-
-                   // DeleteObjectRequest req =
-                 //           DeleteObjectRequest.builder()
-                 //                   .bucketName(bucketname)
-                //                    .key(baseKey)
-               //                     .build();
-
-              //      s3.deleteObject(req);
-//
+                } catch (java.io.UncheckedIOException netEx) {
+                    // 断连，丢弃连接不归还，重试
+                    retries--;
+                    Log.severe("[S3] 网络断连，剩余重试次数: " + retries + " key=" + baseKey, netEx);
+                    s3 = null; // 不归还，让 releaseConnection 跳过
+                    if (retries > 0) {
+                        try { Thread.sleep(500); } catch (InterruptedException ie) { break; }
+                    }
+                } catch (StorageShutdownException x) {
+                    break;
+                } catch (Exception x) {
+                    Log.severe("[S3] WRITE FAILED: " + baseKey, x);
+                    break; // 非网络错误不重试
+                } finally {
+                    releaseConnection(s3);
                 }
-                else {
-
-                  //  Log.info("[S3] PUT: " + baseKey +
-                       //     " size=" + encImage.buf.length);
-
-                    PutObjectRequest req =
-                            PutObjectRequest.builder()
-                                    .bucketName(bucketname)
-                                    .key(baseKey)
-                                    .contentType(
-                                            map.getImageFormat()
-                                                    .getEncoding()
-                                                    .getContentType())
-                                    .addMetadata(
-                                            "x-dynmap-hash",
-                                            Long.toHexString(hash))
-                                    .addMetadata(
-                                            "x-dynmap-ts",
-                                            Long.toString(timestamp))
-                                    .build();
-
-                    s3.putObject(
-                            req,
-                            RequestBody.fromBytes(encImage.buf));
-
-                    //Log.info("[S3] PUT OK: " + baseKey);
-                    AWSS3MapStorage.this.tileHashCache.put(baseKey, hash);
-                }
-
-                done = true;
-
             }
-            catch (Exception x) {
 
-                Log.severe("[S3] WRITE FAILED: " + baseKey, x);
-
-            }
-            finally {
-
-                releaseConnection(s3);
-
-            }
-            if (zoom == 0) {
+            // 只有写入成功才入队 zoomout
+            if (done && zoom == 0) {
                 world.enqueueZoomOutUpdate(this);
             }
             return done;

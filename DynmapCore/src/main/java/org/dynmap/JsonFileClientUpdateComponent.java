@@ -75,22 +75,21 @@ public class JsonFileClientUpdateComponent extends ClientUpdateComponent {
                         return;
                     }
                 }
-                BufferOutputStream buf = null;
-                if (f.content != null) {
-                    buf = new BufferOutputStream();
-                    if(f.phpwrapper) {
-                        buf.write("<?php /*\n".getBytes(cs_utf8));
+                try {
+                    BufferOutputStream buf = null;
+                    if (f.content != null) {
+                        buf = new BufferOutputStream();
+                        if(f.phpwrapper) buf.write("<?php /*\n".getBytes(cs_utf8));
+                        buf.write(f.content);
+                        if(f.phpwrapper) buf.write("\n*/ ?>\n".getBytes(cs_utf8));
+                        buf.trim();
                     }
-                    buf.write(f.content);
-                    if(f.phpwrapper) {
-                        buf.write("\n*/ ?>\n".getBytes(cs_utf8));
+                    if (!storage.setStandaloneFile(f.filename, buf)) {
+                        Log.severe("Exception while writing JSON-file - " + f.filename);
                     }
-                }
-                if (buf != null) {
-                    buf.trim();
-                }
-                if (!storage.setStandaloneFile(f.filename, buf)) {
-                    Log.severe("Exception while writing JSON-file - " + f.filename);
+                } catch (Exception ex) {
+                    // 写文件异常不能让整个循环退出，否则 pending 永远不会被清掉
+                    Log.severe("Exception while writing JSON-file - " + f.filename, ex);
                 }
             }
         }
@@ -105,15 +104,11 @@ public class JsonFileClientUpdateComponent extends ClientUpdateComponent {
         ftw.content = content;
         ftw.phpwrapper = phpwrap;
         synchronized(lock) {
-            boolean didadd = false;
-            if(pending == null) {
-                didadd = true;
-                pending = new FileProcessor();
-            }
             files_to_write.remove(ftw);
             files_to_write.add(ftw);
-            if(didadd) {
-                MapManager.scheduleDelayedJob(new FileProcessor(), 0);
+            if(pending == null) {
+                pending = new FileProcessor();
+                MapManager.scheduleDelayedJob(pending, 0);  // ← 提交同一个实例
             }
         }
     }
