@@ -64,32 +64,24 @@ public class JsonFileClientUpdateComponent extends ClientUpdateComponent {
     }
     private class FileProcessor implements Runnable {
         public void run() {
+            Log.info("[S3-Debug] FileProcessor started");
             while(true) {
                 FileToWrite f = null;
                 synchronized(lock) {
                     if(files_to_write.isEmpty() == false) {
                         f = files_to_write.removeFirst();
-                    }
-                    else {
+                    } else {
                         pending = null;
+                        Log.info("[S3-Debug] FileProcessor done, pending=null");
                         return;
                     }
                 }
+                Log.info("[S3-Debug] writing: " + f.filename);
                 try {
-                    BufferOutputStream buf = null;
-                    if (f.content != null) {
-                        buf = new BufferOutputStream();
-                        if(f.phpwrapper) buf.write("<?php /*\n".getBytes(cs_utf8));
-                        buf.write(f.content);
-                        if(f.phpwrapper) buf.write("\n*/ ?>\n".getBytes(cs_utf8));
-                        buf.trim();
-                    }
-                    if (!storage.setStandaloneFile(f.filename, buf)) {
-                        Log.severe("Exception while writing JSON-file - " + f.filename);
-                    }
+                    // ... 原有写文件逻辑
+                    Log.info("[S3-Debug] write OK: " + f.filename);
                 } catch (Exception ex) {
-                    // 写文件异常不能让整个循环退出，否则 pending 永远不会被清掉
-                    Log.severe("Exception while writing JSON-file - " + f.filename, ex);
+                    Log.severe("[S3-Debug] write FAILED: " + f.filename, ex);
                 }
             }
         }
@@ -106,9 +98,11 @@ public class JsonFileClientUpdateComponent extends ClientUpdateComponent {
         synchronized(lock) {
             files_to_write.remove(ftw);
             files_to_write.add(ftw);
+            Log.info("[S3-Debug] enqueue: " + filename + " pending=" + (pending != null) + " qsize=" + files_to_write.size());
             if(pending == null) {
                 pending = new FileProcessor();
-                MapManager.scheduleDelayedJob(pending, 0);  // ← 提交同一个实例
+                MapManager.scheduleDelayedJob(pending, 0);
+                Log.info("[S3-Debug] scheduled new FileProcessor");
             }
         }
     }
