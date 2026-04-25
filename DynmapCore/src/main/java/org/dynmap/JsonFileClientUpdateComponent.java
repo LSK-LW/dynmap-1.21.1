@@ -64,7 +64,6 @@ public class JsonFileClientUpdateComponent extends ClientUpdateComponent {
     }
     private class FileProcessor implements Runnable {
         public void run() {
-
             while(true) {
                 FileToWrite f = null;
                 synchronized(lock) {
