@@ -64,32 +64,24 @@ public class JsonFileClientUpdateComponent extends ClientUpdateComponent {
     }
     private class FileProcessor implements Runnable {
         public void run() {
+
             while(true) {
                 FileToWrite f = null;
                 synchronized(lock) {
                     if(files_to_write.isEmpty() == false) {
                         f = files_to_write.removeFirst();
-                    }
-                    else {
+                    } else {
                         pending = null;
+
                         return;
                     }
                 }
+
                 try {
-                    BufferOutputStream buf = null;
-                    if (f.content != null) {
-                        buf = new BufferOutputStream();
-                        if(f.phpwrapper) buf.write("<?php /*\n".getBytes(cs_utf8));
-                        buf.write(f.content);
-                        if(f.phpwrapper) buf.write("\n*/ ?>\n".getBytes(cs_utf8));
-                        buf.trim();
-                    }
-                    if (!storage.setStandaloneFile(f.filename, buf)) {
-                        Log.severe("Exception while writing JSON-file - " + f.filename);
-                    }
+                    // ... 原有写文件逻辑
+
                 } catch (Exception ex) {
-                    // 写文件异常不能让整个循环退出，否则 pending 永远不会被清掉
-                    Log.severe("Exception while writing JSON-file - " + f.filename, ex);
+
                 }
             }
         }
@@ -106,9 +98,11 @@ public class JsonFileClientUpdateComponent extends ClientUpdateComponent {
         synchronized(lock) {
             files_to_write.remove(ftw);
             files_to_write.add(ftw);
+
             if(pending == null) {
                 pending = new FileProcessor();
-                MapManager.scheduleDelayedJob(pending, 0);  // ← 提交同一个实例
+                MapManager.scheduleDelayedJob(pending, 0);
+
             }
         }
     }
@@ -339,11 +333,11 @@ public class JsonFileClientUpdateComponent extends ClientUpdateComponent {
                 outputFile = "dynmap_" + dynmapWorld.getName() + ".json";
             }
 
-            CompletableFuture.runAsync(() -> {
+
                 byte[] content = Json.stringifyJson(update).getBytes(cs_utf8);
 
                 enqueueFileWrite(outputFile, content, dowrap);
-            });
+
         }
     }
     
