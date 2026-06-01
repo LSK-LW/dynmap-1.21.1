@@ -25,7 +25,6 @@ import org.dynmap.storage.MapStorageTile;
 import org.dynmap.storage.MapStorageTileEnumCB;
 import org.dynmap.storage.MapStorageBaseTileEnumCB;
 import org.dynmap.storage.MapStorageTileSearchEndCB;
-import org.dynmap.storage.filetree.FileTreeMapStorage;
 import org.dynmap.utils.BufferInputStream;
 import org.dynmap.utils.BufferOutputStream;
 
@@ -202,7 +201,7 @@ public class AWSS3MapStorage extends MapStorage {
                                 .addMetadata("x-dynmap-hash", Long.toHexString(hash))
                                 .addMetadata("x-dynmap-ts", Long.toString(timestamp))
                                 .build();
-                        s3.putObject(req, RequestBody.fromBytes(encImage.buf));
+                        s3.putObject(req, RequestBody.fromBytes(Arrays.copyOf(encImage.buf, encImage.len)));
                         AWSS3MapStorage.this.tileHashCache.put(baseKey, hash);
                     }
                     done = true;
@@ -609,7 +608,7 @@ public class AWSS3MapStorage extends MapStorage {
             }
             else {
                 PutObjectRequest req = PutObjectRequest.builder().bucketName(bucketname).key(baseKey).contentType("image/png").build();
-                s3.putObject(req, RequestBody.fromBytes(encImage.buf));
+                s3.putObject(req, RequestBody.fromBytes(Arrays.copyOf(encImage.buf, encImage.len)));
             }
             done = true;
         } catch (S3Exception x) {
@@ -662,7 +661,7 @@ public class AWSS3MapStorage extends MapStorage {
             }
             else {
                 PutObjectRequest req = PutObjectRequest.builder().bucketName(bucketname).key(baseKey).contentType("image/png").build();
-                s3.putObject(req, RequestBody.fromBytes(encImage.buf));
+                s3.putObject(req, RequestBody.fromBytes(Arrays.copyOf(encImage.buf, encImage.len)));
             }
             done = true;
         } catch (S3Exception x) {
