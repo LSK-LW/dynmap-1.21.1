@@ -1359,15 +1359,21 @@ public class IsoHDPerspective implements HDPerspective {
             try {
                 if(mtile.matchesHashCode(crc) == false) {
                     /* Wrap buffer as buffered image */
+                    boolean writeDone;
                     if(rendered[i]) {   
-                        mtile.write(crc, im[i].buf_img, startTimestamp);
+                        writeDone = mtile.write(crc, im[i].buf_img, startTimestamp);
                     }
                     else {
-                        mtile.delete();
+                        writeDone = mtile.delete();
                     }
-                    MapManager.mapman.pushUpdate(tile.getDynmapWorld(), new Client.Tile(mtile.getURI()));
-                    tile_update = true;
-                    renderone = true;
+                    if (writeDone) {
+                        MapManager.mapman.pushUpdate(tile.getDynmapWorld(), new Client.Tile(mtile.getURI()));
+                        tile_update = true;
+                        renderone = true;
+                    }
+                    else {
+                        Log.warning("Tile write failed: " + mtile.getURI());
+                    }
                 }
                 else {
                     if(!rendered[i]) {   
@@ -1390,15 +1396,21 @@ public class IsoHDPerspective implements HDPerspective {
                 try {
                     if(mtile.matchesHashCode(crc) == false) {
                         /* Wrap buffer as buffered image */
+                        boolean writeDone;
                         if(rendered[i]) {
-                            mtile.write(crc, dayim[i].buf_img, startTimestamp);
+                            writeDone = mtile.write(crc, dayim[i].buf_img, startTimestamp);
                         }
                         else {
-                            mtile.delete();
+                            writeDone = mtile.delete();
                         }
-                        MapManager.mapman.pushUpdate(tile.getDynmapWorld(), new Client.Tile(mtile.getURI()));
-                        tile_update = true;
-                        renderone = true;
+                        if (writeDone) {
+                            MapManager.mapman.pushUpdate(tile.getDynmapWorld(), new Client.Tile(mtile.getURI()));
+                            tile_update = true;
+                            renderone = true;
+                        }
+                        else {
+                            Log.warning("Tile write failed: " + mtile.getURI());
+                        }
                     }
                     else {
                         if(!rendered[i]) {   

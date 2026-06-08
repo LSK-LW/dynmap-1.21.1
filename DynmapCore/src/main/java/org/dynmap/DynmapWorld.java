@@ -100,11 +100,19 @@ public abstract class DynmapWorld {
     public int getExtraZoomOutLevels() { return extrazoomoutlevels; }
     
     public void enqueueZoomOutUpdate(MapStorageTile tile) {
-
         MapTypeState mts = getMapState(tile.map);
         if (mts != null) {
             mts.setZoomOutInv(tile.x, tile.y, tile.zoom);
         }
+    }
+
+    public void enqueueZoomOutUpdate(MapType map) {
+        storage.enumMapBaseTiles(this, map, new org.dynmap.storage.MapStorageBaseTileEnumCB() {
+            @Override
+            public void tileFound(MapStorageTile tile, ImageEncoding enc) {
+                tile.enqueueZoomOutUpdate();
+            }
+        }, null);
     }
          
     public void freshenZoomOutFiles() {

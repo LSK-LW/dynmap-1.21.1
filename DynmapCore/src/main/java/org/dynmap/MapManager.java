@@ -580,6 +580,12 @@ public class MapManager {
                                 }
                             }
                         }
+                        if(rendertype.equals(RENDERTYPE_FULLRENDER) || rendertype.equals(RENDERTYPE_RADIUSRENDER)) {
+                            for(MapType mt : map.getMapsSharingRender(world)) {
+                                world.enqueueZoomOutUpdate(mt);
+                            }
+                            scheduleDelayedJob(new DoZoomOutProcessing(), 1000);
+                        }
                     }                	
                     found.clear();
                     rendered.clear();
@@ -1512,6 +1518,11 @@ public class MapManager {
     
     public boolean isRenderJobActive(String wname) {
         return active_renders.containsKey(wname);
+    }
+
+    public boolean isFullOrRadiusRenderActive(String wname) {
+        FullWorldRenderState rndr = active_renders.get(wname);
+        return (rndr != null) && (rndr.rendertype.equals(RENDERTYPE_FULLRENDER) || rndr.rendertype.equals(RENDERTYPE_RADIUSRENDER));
     }
 
     private void savePending(DynmapWorld w, boolean keepQueue) {

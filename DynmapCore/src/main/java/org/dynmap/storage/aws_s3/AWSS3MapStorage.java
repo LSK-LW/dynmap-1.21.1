@@ -2,6 +2,7 @@ package org.dynmap.storage.aws_s3;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -15,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.dynmap.DynmapCore;
 import org.dynmap.DynmapWorld;
 import org.dynmap.Log;
+import org.dynmap.MapManager;
 import org.dynmap.MapType;
 import org.dynmap.MapType.ImageEncoding;
 import org.dynmap.MapType.ImageVariant;
@@ -46,6 +48,7 @@ import io.github.linktosriram.s3lite.http.spi.request.RequestBody;
 import io.github.linktosriram.s3lite.http.urlconnection.URLConnectionSdkHttpClient;
 
 public class AWSS3MapStorage extends MapStorage {
+    private static final int MAX_S3_RETRIES = 6;
     private ConcurrentHashMap<String, Long> tileHashCache = new ConcurrentHashMap<>();
 
     public class StorageTile extends MapStorageTile {
@@ -75,7 +78,6 @@ public class AWSS3MapStorage extends MapStorage {
             S3Client s3 = null;
 
             try {
-                Log.info("[S3] CHECK EXISTS: " + baseKey);
                 s3 = getConnection();
 
                 ListObjectsV2Request req =
@@ -132,9 +134,10 @@ public class AWSS3MapStorage extends MapStorage {
 
         @Override
         public TileRead read() {
-            int retries = 3;
+            int retries = MAX_S3_RETRIES;
             while (retries > 0) {
                 S3Client s3 = null;
+                boolean discardConnection = false;
                 try {
                     s3 = getConnection();
                     GetObjectRequest req = GetObjectRequest.builder()
@@ -157,20 +160,26 @@ public class AWSS3MapStorage extends MapStorage {
                     return null;
                 } catch (NoSuchKeyException nskx) {
                     return null; // 文件不存在，正常情况
-                } catch (java.io.UncheckedIOException netEx) {
-                    retries--;
-                    Log.severe("[S3] READ 断连，剩余重试次数: " + retries + " key=" + baseKey, netEx);
-                    s3 = null;
-                    if (retries > 0) {
-                        try { Thread.sleep(500); } catch (InterruptedException ie) { break; }
-                    }
                 } catch (StorageShutdownException x) {
                     break;
-                } catch (S3Exception x) {
-                    Log.severe("[S3] READ FAILED: " + baseKey, x);
-                    break;
+                } catch (Exception x) {
+                    retries--;
+                    discardConnection = isRetryableS3Error(x);
+                    if (discardConnection && retries > 0) {
+                        Log.info("[S3] READ retry, remaining=" + retries + " key=" + baseKey + " error=" + x.getMessage());
+                        sleepBeforeRetry(MAX_S3_RETRIES - retries);
+                    }
+                    else {
+                        Log.severe("[S3] READ FAILED: " + baseKey, x);
+                        break;
+                    }
                 } finally {
-                    releaseConnection(s3);
+                    if (discardConnection) {
+                        discardConnection(s3);
+                    }
+                    else {
+                        releaseConnection(s3);
+                    }
                 }
             }
             return null;
@@ -179,10 +188,12 @@ public class AWSS3MapStorage extends MapStorage {
         @Override
         public boolean write(long hash, BufferOutputStream encImage, long timestamp) {
             boolean done = false;
-            int retries = 3;
+            int retries = MAX_S3_RETRIES;
+            byte[] payload = (encImage == null) ? null : Arrays.copyOf(encImage.buf, encImage.len);
 
             while (!done && retries > 0) {
                 S3Client s3 = null;
+                boolean discardConnection = false;
                 try {
                     s3 = getConnection();
 
@@ -201,31 +212,36 @@ public class AWSS3MapStorage extends MapStorage {
                                 .addMetadata("x-dynmap-hash", Long.toHexString(hash))
                                 .addMetadata("x-dynmap-ts", Long.toString(timestamp))
                                 .build();
-                        s3.putObject(req, RequestBody.fromBytes(Arrays.copyOf(encImage.buf, encImage.len)));
+                        s3.putObject(req, RequestBody.fromBytes(payload));
                         AWSS3MapStorage.this.tileHashCache.put(baseKey, hash);
                     }
                     done = true;
 
-                } catch (java.io.UncheckedIOException netEx) {
-                    // 断连，丢弃连接不归还，重试
-                    retries--;
-                    Log.severe("[S3] 网络断连，剩余重试次数: " + retries + " key=" + baseKey, netEx);
-                    s3 = null; // 不归还，让 releaseConnection 跳过
-                    if (retries > 0) {
-                        try { Thread.sleep(500); } catch (InterruptedException ie) { break; }
-                    }
                 } catch (StorageShutdownException x) {
                     break;
                 } catch (Exception x) {
-                    Log.severe("[S3] WRITE FAILED: " + baseKey, x);
-                    break; // 非网络错误不重试
+                    retries--;
+                    discardConnection = isRetryableS3Error(x);
+                    if (discardConnection && retries > 0) {
+                        Log.info("[S3] WRITE retry, remaining=" + retries + " key=" + baseKey + " error=" + x.getMessage());
+                        sleepBeforeRetry(MAX_S3_RETRIES - retries);
+                    }
+                    else {
+                        Log.severe("[S3] WRITE FAILED: " + baseKey, x);
+                        break;
+                    }
                 } finally {
-                    releaseConnection(s3);
+                    if (discardConnection) {
+                        discardConnection(s3);
+                    }
+                    else {
+                        releaseConnection(s3);
+                    }
                 }
             }
 
             // 只有写入成功才入队 zoomout
-            if (done && zoom == 0) {
+            if (done && zoom == 0 && !MapManager.mapman.isFullOrRadiusRenderActive(world.getName())) {
                 world.enqueueZoomOutUpdate(this);
             }
             return done;
@@ -821,9 +837,10 @@ public class AWSS3MapStorage extends MapStorage {
             }
         }
 
-        int retries = 3;
+        int retries = MAX_S3_RETRIES;
         while (retries > 0) {
             S3Client s3 = null;
+            boolean discardConnection = false;
             try {
                 s3 = getConnection();
                 if (content == null) {
@@ -846,23 +863,46 @@ public class AWSS3MapStorage extends MapStorage {
                     if (digest != null) standalone_cache.put(fileid, digest);
                 }
                 return true;
-            } catch (java.io.UncheckedIOException netEx) {
-                retries--;
-                Log.severe("[S3] Standalone 断连，剩余重试: " + retries + " key=" + baseKey, netEx);
-                s3 = null; // 丢弃连接，不归还
-                if (retries > 0) {
-                    try { Thread.sleep(500); } catch (InterruptedException ie) { break; }
-                }
-            } catch (S3Exception x) {
-                Log.severe("[S3] Standalone WRITE FAILED: " + baseKey, x);
-                break;
             } catch (StorageShutdownException x) {
                 break;
+            } catch (Exception x) {
+                retries--;
+                discardConnection = isRetryableS3Error(x);
+                if (discardConnection && retries > 0) {
+                    Log.info("[S3] Standalone WRITE retry, remaining=" + retries + " key=" + baseKey + " error=" + x.getMessage());
+                    sleepBeforeRetry(MAX_S3_RETRIES - retries);
+                }
+                else {
+                    Log.severe("[S3] Standalone WRITE FAILED: " + baseKey, x);
+                    break;
+                }
             } finally {
-                releaseConnection(s3);
+                if (discardConnection) {
+                    discardConnection(s3);
+                }
+                else {
+                    releaseConnection(s3);
+                }
             }
         }
         return false;
+    }
+
+    private static boolean isRetryableS3Error(Throwable x) {
+        for (Throwable t = x; t != null; t = t.getCause()) {
+            if ((t instanceof SocketException) || (t instanceof IOException)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void sleepBeforeRetry(int attempt) {
+        try {
+            Thread.sleep(Math.min(2000L, 250L * attempt));
+        } catch (InterruptedException ix) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private S3Client getConnection() throws S3Exception, StorageShutdownException {
@@ -922,6 +962,18 @@ public class AWSS3MapStorage extends MapStorage {
                 cpoolCount--;   // And reduce count
                 cpool.notifyAll();
             }
+        }
+    }
+
+    private void discardConnection(S3Client c) {
+        if (c == null) return;
+        synchronized (cpool) {
+            try {
+                c.close();
+            } catch (IOException e) {
+            }
+            cpoolCount--;
+            cpool.notifyAll();
         }
     }
 }
