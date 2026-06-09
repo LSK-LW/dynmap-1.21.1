@@ -1545,33 +1545,59 @@ public class MapManager {
             sender.sendMessage("World '" + wname + "' has no maps configured");
             return;
         }
-        sender.sendMessage("Zoom render scan queued for world '" + wname + "'" + ((mapname != null) ? (", map '" + mapname + "'") : "") + ".");
+        final String target = "world '" + wname + "'" + ((mapname != null) ? (", map '" + mapname + "'") : "");
+        sender.sendMessage("Zoom render scan queued for " + target + ".");
+        Log.info("Zoom render scan queued for " + target);
         scheduleDelayedJob(new Runnable() {
             public void run() {
-                final AtomicInteger cnt = new AtomicInteger(0);
+                final AtomicInteger totalCount = new AtomicInteger(0);
                 final MapStorage ms = world.getMapStorage();
                 try {
                     for(final MapType map : maps) {
+                        final AtomicInteger mapCount = new AtomicInteger(0);
+                        Log.info("Zoom render scanning base tiles for world '" + wname + "', map '" + map.getName() + "'");
                         ms.enumMapBaseTiles(world, map, new MapStorageBaseTileEnumCB() {
                             @Override
                             public void tileFound(MapStorageTile tile, MapType.ImageEncoding enc) {
                                 tile.enqueueZoomOutUpdate();
-                                cnt.incrementAndGet();
+                                totalCount.incrementAndGet();
+                                int mcnt = mapCount.incrementAndGet();
+                                if((mcnt % 10000) == 0) {
+                                    Log.info("Zoom render scanned " + mcnt + " base tiles for world '" + wname + "', map '" + map.getName() + "'");
+                                }
                             }
                         }, new MapStorageTileSearchEndCB() {
                             @Override
                             public void searchEnded() {
                             }
                         });
+                        Log.info("Zoom render scan complete for world '" + wname + "', map '" + map.getName() + "': " + mapCount.get() + " base tiles found");
+                        if(mapCount.get() == 0) {
+                            sender.sendMessage("Zoom render found no base tiles for world '" + wname + "', map '" + map.getName() + "'.");
+                        }
                     }
+                    int before = countZoomOutInvalid(world, maps);
+                    Log.info("Zoom render processing started for " + target + ": " + totalCount.get() + " base tiles scanned, " + before + " zoom-out tiles queued");
                     world.freshenZoomOutFiles();
-                    sender.sendMessage("Zoom render completed for world '" + wname + "'" + ((mapname != null) ? (", map '" + mapname + "'") : "") + ": " + cnt.get() + " base tiles scanned.");
+                    int after = countZoomOutInvalid(world, maps);
+                    Log.info("Zoom render processing complete for " + target + ": " + totalCount.get() + " base tiles scanned, " + after + " zoom-out tiles still queued");
+                    sender.sendMessage("Zoom render completed for " + target + ": " + totalCount.get() + " base tiles scanned, " + before + " zoom-out tiles queued, " + after + " still queued.");
                 } catch (Exception e) {
-                    sender.sendMessage("Zoom render failed for world '" + wname + "'" + ((mapname != null) ? (", map '" + mapname + "'") : "") + ".");
+                    sender.sendMessage("Zoom render failed for " + target + ".");
                     Log.severe("Zoom render error for world '" + wname + "'", e);
                 }
             }
         }, 0);
+    }
+
+    private int countZoomOutInvalid(DynmapWorld world, List<MapType> maps) {
+        int cnt = 0;
+        for(MapTypeState mts : world.mapstate) {
+            if(maps.contains(mts.type)) {
+                cnt += mts.getInvCount();
+            }
+        }
+        return cnt;
     }
 
     private void savePending(DynmapWorld w, boolean keepQueue) {
