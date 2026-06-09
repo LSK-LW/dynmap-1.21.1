@@ -108,9 +108,16 @@ public abstract class DynmapWorld {
          
     public int freshenZoomOutFiles() {
         MapTypeState.ZoomOutCoord c = new MapTypeState.ZoomOutCoord();
+        int pending = 0;
+        for (MapTypeState mts : mapstate) {
+            pending += mts.getZoomOutInvCount();
+        }
+        if (pending == 0) {
+            return 0;
+        }
         int processed = 0;
         long lastLog = System.currentTimeMillis();
-        Log.info("Zoom-out freshen started for world '" + getName() + "'");
+        Log.info("Zoom-out freshen started for world '" + getName() + "': pending=" + pending);
         for (MapTypeState mts : mapstate) {
             if (cancelled) return processed;
             MapType mt = mts.type;
