@@ -124,7 +124,7 @@ public abstract class DynmapWorld {
         return freshenZoomOutFiles(1);
     }
 
-    public int freshenZoomOutFiles(int maxPasses) {
+    public synchronized int freshenZoomOutFiles(int maxPasses) {
         int pending = getZoomOutInvCount();
         if (pending == 0) {
             return 0;

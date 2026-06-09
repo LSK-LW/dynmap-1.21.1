@@ -69,6 +69,7 @@ public class MapManager {
     private HashMap<String, String> blockalias = new HashMap<String, String>();
     private static final int ZOOM_RENDER_BATCH_SIZE = 250000;
     private static final int ZOOM_RENDER_MAX_FRESHEN_PASSES = 32;
+    private Set<String> manualZoomRenders = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
     
     private boolean pausefullrenders = false;
 
@@ -950,6 +951,9 @@ public class MapManager {
                     Debug.debug("DoZoomOutProcessing started");
                     ArrayList<DynmapWorld> wl = new ArrayList<DynmapWorld>(worlds);
                     for (DynmapWorld w : wl) {
+                        if (manualZoomRenders.contains(w.getName())) {
+                            continue;
+                        }
                         w.freshenZoomOutFiles();
                     }
                     Debug.debug("DoZoomOutProcessing finished");
@@ -1569,6 +1573,7 @@ public class MapManager {
             public void run() {
                 final AtomicInteger totalCount = new AtomicInteger(0);
                 final MapStorage ms = world.getMapStorage();
+                manualZoomRenders.add(wname);
                 try {
                     if(isFullOrRadiusRenderActive(wname)) {
                         Log.info("Zoom render aborted for " + target + " before scan because active render status is: " + getActiveRenderStatus(wname));
@@ -1619,6 +1624,8 @@ public class MapManager {
                 } catch (Exception e) {
                     sender.sendMessage("Zoom render failed for " + target + ".");
                     Log.severe("Zoom render error for world '" + wname + "'", e);
+                } finally {
+                    manualZoomRenders.remove(wname);
                 }
             }
         }, 0);
