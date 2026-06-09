@@ -71,7 +71,8 @@ public class MapManager {
     private static final int ZOOM_RENDER_BATCH_SIZE = 250000;
     private static final int ZOOM_RENDER_MAX_FRESHEN_PASSES = 1;
     private static final int ZOOM_RENDER_MAX_DRAIN_ROUNDS = 1024;
-    private static final int ZOOM_RENDER_MAX_TILES_PER_DRAIN_JOB = 25;
+    private static final int ZOOM_RENDER_MAX_TILES_PER_DRAIN_JOB = 1;
+    private static final int ZOOM_RENDER_DRAIN_DELAY_MS = 50;
     private Set<String> manualZoomRenders = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
     
     private boolean pausefullrenders = false;
@@ -1690,7 +1691,7 @@ public class MapManager {
                     complete = true;
                     return;
                 }
-                scheduleDelayedJob(this, 0);
+                scheduleDelayedJob(this, ZOOM_RENDER_DRAIN_DELAY_MS);
             } catch (Exception e) {
                 sender.sendMessage("Zoom render failed for " + target + ".");
                 Log.severe("Zoom render drain error for " + target, e);

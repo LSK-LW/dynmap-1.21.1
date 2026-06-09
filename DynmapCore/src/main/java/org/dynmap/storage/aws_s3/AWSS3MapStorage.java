@@ -49,6 +49,7 @@ import io.github.linktosriram.s3lite.http.urlconnection.URLConnectionSdkHttpClie
 
 public class AWSS3MapStorage extends MapStorage {
     private static final int MAX_S3_RETRIES = 6;
+    private static final int S3_HTTP_TIMEOUT_MS = 10000;
     private ConcurrentHashMap<String, Long> tileHashCache = new ConcurrentHashMap<>();
     private AtomicInteger zoomWriteLogCount = new AtomicInteger();
 
@@ -951,7 +952,10 @@ public class AWSS3MapStorage extends MapStorage {
                         c = new DefaultS3ClientBuilder()
                                 .credentialsProvider(() -> AwsBasicCredentials.create(access_key_id, secret_access_key))
                                 .region(region)
-                                .httpClient(URLConnectionSdkHttpClient.create())
+                                .httpClient(URLConnectionSdkHttpClient.withCustomizer(conn -> {
+                                    conn.setConnectTimeout(S3_HTTP_TIMEOUT_MS);
+                                    conn.setReadTimeout(S3_HTTP_TIMEOUT_MS);
+                                }))
                                 .build();
                         if (c == null) {
                             Log.severe("Error creating S3 access client");
