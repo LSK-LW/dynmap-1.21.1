@@ -67,6 +67,7 @@ public class MapManager {
     private boolean useBrightnessTable = false;
     private boolean usenormalpriority = false;
     private HashMap<String, String> blockalias = new HashMap<String, String>();
+    private static final int ZOOM_RENDER_BATCH_SIZE = 250000;
     
     private boolean pausefullrenders = false;
 
@@ -1564,6 +1565,12 @@ public class MapManager {
                                 int mcnt = mapCount.incrementAndGet();
                                 if((mcnt % 10000) == 0) {
                                     Log.info("Zoom render scanned " + mcnt + " base tiles for world '" + wname + "', map '" + map.getName() + "'");
+                                }
+                                if((mcnt % ZOOM_RENDER_BATCH_SIZE) == 0) {
+                                    int queued = countZoomOutInvalid(world, maps);
+                                    Log.info("Zoom render partial processing started for world '" + wname + "', map '" + map.getName() + "': " + mcnt + " base tiles scanned, " + queued + " zoom-out tiles queued");
+                                    world.freshenZoomOutFiles();
+                                    Log.info("Zoom render partial processing complete for world '" + wname + "', map '" + map.getName() + "': " + countZoomOutInvalid(world, maps) + " zoom-out tiles still queued");
                                 }
                             }
                         }, new MapStorageTileSearchEndCB() {
