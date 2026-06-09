@@ -359,6 +359,7 @@ public class AWSS3MapStorage extends MapStorage {
         }
         // Now creste the access client for the S3 service
         Log.info("Using AWS S3 storage: web site at S3 bucket " + bucketname + " in region " + region);
+        Log.info("Using AWS S3 virtual-host endpoint: https://" + bucketname + "." + region.getEndpoint().getHost());
         S3Client s3 = null;
         try {
             s3 = getConnection();
@@ -448,13 +449,24 @@ public class AWSS3MapStorage extends MapStorage {
         ListObjectsV2Request req = ListObjectsV2Request.builder().bucketName(bucketname).prefix(basekey).maxKeys(1000).build();
         boolean done = false;
         S3Client s3 = null;
+        int pageCount = 0;
+        int objectCount = 0;
+        int parsedCount = 0;
+        int baseCount = 0;
         try {
+            Log.info("[S3] ENUM start bucket=" + bucketname + " prefix=" + basekey);
             s3 = getConnection();
             while (!done) {
                 ListObjectsV2Response result = s3.listObjectsV2(req);
+                pageCount++;
                 List<S3Object> objects = result.getContents();
+                objectCount += objects.size();
                 for (S3Object os : objects) {
                     String key = os.getKey();
+                    if (!key.startsWith(basekey)) {
+                        Log.info("[S3] ENUM skip unexpected key=" + key + " base=" + basekey);
+                        continue;
+                    }
                     key = key.substring(basekey.length()); // 去掉前缀，剩下如 "0_0/z_2_3.jpg"
 
                     // 解析扩展名
@@ -489,30 +501,35 @@ public class AWSS3MapStorage extends MapStorage {
                             int x = Integer.parseInt(coord[0]);
                             int y = Integer.parseInt(coord[1]);
                             MapStorageTile t = new StorageTile(world, map, x, y, zoom, var);
+                            parsedCount++;
                             if (cb != null)
                                 cb.tileFound(t, fmt);
-                            if (cbBase != null && zoom == 0)   // ← 注意这里用 zoom==0 而不是 t.zoom
+                            if (cbBase != null && zoom == 0) { // ← 注意这里用 zoom==0 而不是 t.zoom
                                 cbBase.tileFound(t, fmt);
+                                baseCount++;
+                            }
                             t.cleanup();
                         } catch (NumberFormatException nfx) {
-                            Log.info("[ParseError]: " + nfx);
+                            Log.info("[S3] ENUM parse error key=" + os.getKey() + " error=" + nfx);
                         }
                     }
                 }
+                if ((pageCount % 10) == 0 || result.isTruncated() == false) {
+                    Log.info("[S3] ENUM progress bucket=" + bucketname + " prefix=" + basekey + " pages=" + pageCount + " objects=" + objectCount + " parsed=" + parsedCount + " base=" + baseCount);
+                }
                 if (result.isTruncated()) {	// If more, build continuiation request
                     req = ListObjectsV2Request.builder().bucketName(bucketname)
-                            .prefix(basekey).delimiter("").maxKeys(1000).continuationToken(result.getContinuationToken()).encodingType("url").requestPayer("requester").build();
+                            .prefix(basekey).maxKeys(1000).continuationToken(result.getContinuationToken()).build();
                 }
                 else {	// Else, we're done
                     done = true;
                 }
             }
         } catch (S3Exception x) {
-            if (!x.getCode().equals("SignatureDoesNotMatch")) {	// S3 behavior when no object match....
-                Log.severe("AWS Exception", x);
-                Log.severe("req=" + req);
-            }
+            Log.severe("[S3] ENUM failed bucket=" + bucketname + " prefix=" + basekey, x);
+            Log.severe("req=" + req);
         } catch (StorageShutdownException x) {
+            Log.info("[S3] ENUM stopped by storage shutdown bucket=" + bucketname + " prefix=" + basekey);
         } finally {
             releaseConnection(s3);
         }
