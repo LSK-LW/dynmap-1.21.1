@@ -213,6 +213,9 @@ public class AWSS3MapStorage extends MapStorage {
                                 .build();
                         s3.putObject(req, RequestBody.fromBytes(payload));
                         AWSS3MapStorage.this.tileHashCache.put(baseKey, hash);
+                        if (zoom > 0) {
+                            Log.info("[S3] ZOOM WRITE OK key=" + baseKey + " bytes=" + payload.length);
+                        }
                     }
                     done = true;
 

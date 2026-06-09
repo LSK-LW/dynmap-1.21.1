@@ -25,6 +25,8 @@ import java.io.IOException;
 public abstract class DynmapWorld {
     public List<MapType> maps = new ArrayList<MapType>();
     public List<MapTypeState> mapstate = new ArrayList<MapTypeState>();
+    private int zoomOutWriteCount = 0;
+    private int zoomOutBlankCount = 0;
 
 
     public UpdateQueue updates = new UpdateQueue();
@@ -287,14 +289,24 @@ public abstract class DynmapWorld {
             if(blank) {
                 if (ztile.exists()) {
                     ztile.delete();
+                    zoomOutBlankCount++;
+                    Log.info("Zoom-out tile deleted because it is blank: " + ztile.getURI());
                     MapManager.mapman.pushUpdate(this, new Client.Tile(ztile.getURI()));
                     enqueueZoomOutUpdate(ztile);
                 }
             }
             else /* if (!ztile.matchesHashCode(crc)) */ {
-                ztile.write(crc, zIm, (mostRecentTimestamp == 0)? System.currentTimeMillis() : mostRecentTimestamp);
-                MapManager.mapman.pushUpdate(this, new Client.Tile(ztile.getURI()));
-                enqueueZoomOutUpdate(ztile);
+                if (ztile.write(crc, zIm, (mostRecentTimestamp == 0)? System.currentTimeMillis() : mostRecentTimestamp)) {
+                    zoomOutWriteCount++;
+                    if ((zoomOutWriteCount <= 10) || ((zoomOutWriteCount % 100) == 0)) {
+                        Log.info("Zoom-out tile write OK: count=" + zoomOutWriteCount + ", uri=" + ztile.getURI());
+                    }
+                    MapManager.mapman.pushUpdate(this, new Client.Tile(ztile.getURI()));
+                    enqueueZoomOutUpdate(ztile);
+                }
+                else {
+                    Log.info("Zoom-out tile write skipped/failed: " + ztile.getURI());
+                }
             }
         } finally {
             ztile.releaseWriteLock();
