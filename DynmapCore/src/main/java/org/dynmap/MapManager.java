@@ -68,6 +68,7 @@ public class MapManager {
     private boolean usenormalpriority = false;
     private HashMap<String, String> blockalias = new HashMap<String, String>();
     private static final int ZOOM_RENDER_BATCH_SIZE = 250000;
+    private static final int ZOOM_RENDER_MAX_FRESHEN_PASSES = 32;
     
     private boolean pausefullrenders = false;
 
@@ -1593,7 +1594,7 @@ public class MapManager {
                                     }
                                     int queued = countZoomOutInvalid(world, maps);
                                     Log.info("Zoom render partial processing started for world '" + wname + "', map '" + map.getName() + "': " + mcnt + " base tiles scanned, " + queued + " zoom-out tiles queued");
-                                    int processed = world.freshenZoomOutFiles();
+                                    int processed = world.freshenZoomOutFiles(ZOOM_RENDER_MAX_FRESHEN_PASSES);
                                     Log.info("Zoom render partial processing complete for world '" + wname + "', map '" + map.getName() + "': processed=" + processed + ", " + countZoomOutInvalid(world, maps) + " zoom-out tiles still queued");
                                 }
                             }
@@ -1609,7 +1610,7 @@ public class MapManager {
                     }
                     int before = countZoomOutInvalid(world, maps);
                     Log.info("Zoom render processing started for " + target + ": " + totalCount.get() + " base tiles scanned, " + before + " zoom-out tiles queued");
-                    int processed = world.freshenZoomOutFiles();
+                    int processed = world.freshenZoomOutFiles(ZOOM_RENDER_MAX_FRESHEN_PASSES);
                     int after = countZoomOutInvalid(world, maps);
                     Log.info("Zoom render processing complete for " + target + ": " + totalCount.get() + " base tiles scanned, processed=" + processed + ", " + after + " zoom-out tiles still queued");
                     sender.sendMessage("Zoom render completed for " + target + ": " + totalCount.get() + " base tiles scanned, " + before + " zoom-out tiles queued, " + processed + " processed, " + after + " still queued.");

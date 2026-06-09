@@ -105,40 +105,58 @@ public abstract class DynmapWorld {
             mts.setZoomOutInv(tile.x, tile.y, tile.zoom);
         }
     }
-         
-    public int freshenZoomOutFiles() {
-        MapTypeState.ZoomOutCoord c = new MapTypeState.ZoomOutCoord();
+
+    public int getZoomOutInvCount() {
         int pending = 0;
         for (MapTypeState mts : mapstate) {
             pending += mts.getZoomOutInvCount();
         }
+        return pending;
+    }
+         
+    public int freshenZoomOutFiles() {
+        return freshenZoomOutFiles(1);
+    }
+
+    public int freshenZoomOutFiles(int maxPasses) {
+        int pending = getZoomOutInvCount();
         if (pending == 0) {
             return 0;
         }
-        int processed = 0;
+        int totalProcessed = 0;
+        int pass = 0;
         long lastLog = System.currentTimeMillis();
         Log.info("Zoom-out freshen started for world '" + getName() + "': pending=" + pending);
-        for (MapTypeState mts : mapstate) {
-            if (cancelled) return processed;
-            MapType mt = mts.type;
-            MapType.ImageVariant var[] = mt.getVariants();
-            mts.startZoomOutIter(); // Start iterator
-            while (mts.nextZoomOutInv(c)) {
-                if(cancelled) return processed;
-                processed++;
-                long now = System.currentTimeMillis();
-                if ((processed % 100) == 0 || (now - lastLog) > 30000) {
-                    Log.info("Zoom-out freshen progress for world '" + getName() + "', map '" + mt.getName() + "': processed=" + processed + ", tile=" + c.x + "," + c.y + ", zoom=" + c.zoomlevel);
-                    lastLog = now;
-                }
-                for (int varIdx = 0; varIdx < var.length; varIdx++) {
-                    MapStorageTile tile = storage.getTile(this, mt, c.x, c.y, c.zoomlevel, var[varIdx]);
-                    processZoomFile(mts, tile, varIdx == 0);
+        while ((pending > 0) && (pass < maxPasses)) {
+            int passProcessed = 0;
+            MapTypeState.ZoomOutCoord c = new MapTypeState.ZoomOutCoord();
+            pass++;
+            for (MapTypeState mts : mapstate) {
+                if (cancelled) return totalProcessed;
+                MapType mt = mts.type;
+                MapType.ImageVariant var[] = mt.getVariants();
+                mts.startZoomOutIter(); // Start iterator
+                while (mts.nextZoomOutInv(c)) {
+                    if(cancelled) return totalProcessed;
+                    totalProcessed++;
+                    passProcessed++;
+                    long now = System.currentTimeMillis();
+                    if ((totalProcessed % 100) == 0 || (now - lastLog) > 30000) {
+                        Log.info("Zoom-out freshen progress for world '" + getName() + "', map '" + mt.getName() + "': pass=" + pass + ", processed=" + totalProcessed + ", tile=" + c.x + "," + c.y + ", zoom=" + c.zoomlevel);
+                        lastLog = now;
+                    }
+                    for (int varIdx = 0; varIdx < var.length; varIdx++) {
+                        MapStorageTile tile = storage.getTile(this, mt, c.x, c.y, c.zoomlevel, var[varIdx]);
+                        processZoomFile(mts, tile, varIdx == 0);
+                    }
                 }
             }
+            pending = getZoomOutInvCount();
+            Log.info("Zoom-out freshen pass complete for world '" + getName() + "': pass=" + pass + ", processed=" + passProcessed + ", remaining=" + pending);
+            if (passProcessed == 0) break;
         }
-        Log.info("Zoom-out freshen finished for world '" + getName() + "': processed=" + processed);
-        return processed;
+        Log.info("Zoom-out freshen finished for world '" + getName() + "': processed=" + totalProcessed + ", remaining=" + pending);
+        return totalProcessed;
     }
     
     public void cancelZoomOutFreshen() {
