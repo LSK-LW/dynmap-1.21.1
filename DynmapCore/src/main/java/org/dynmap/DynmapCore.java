@@ -1224,6 +1224,7 @@ public class DynmapCore implements DynmapCommonAPI {
         "show",
         "version",
         "fullrender",
+        "zoomrender",
         "cancelrender",
         "radiusrender",
         "updaterender",
@@ -1282,6 +1283,8 @@ public class DynmapCore implements DynmapCommonAPI {
         new CommandInfo("dynmap", "fullrender", "<world>:<map>", "Render map <map> of world <world>."),
         new CommandInfo("dynmap", "fullrender", "resume <world>", "Resume render of all maps for world <world>. Skip already rendered tiles."),
         new CommandInfo("dynmap", "fullrender", "resume <world>:<map>", "Resume render of map <map> of world <world>. Skip already rendered tiles."),
+        new CommandInfo("dynmap", "zoomrender", "<world>", "Render zoom-out tiles for all maps of world <world>."),
+        new CommandInfo("dynmap", "zoomrender", "<world>:<map>", "Render zoom-out tiles for map <map> of world <world>."),
         new CommandInfo("dynmap", "radiusrender", "<radius>", "Render at least <radius> block radius from your location on all maps."),
         new CommandInfo("dynmap", "radiusrender", "<radius> <mapname>", "Render at least <radius> block radius from your location on map <mapname>."),
         new CommandInfo("dynmap", "radiusrender", "<world> <x> <z> <radius>", "Render at least <radius> block radius from location <x>,<z> on world <world>."),
@@ -1781,6 +1784,25 @@ public class DynmapCore implements DynmapCommonAPI {
                 } else {
                     sender.sendMessage("World name is required");
                 }
+            } else if (c.equals("zoomrender") && checkPlayerPermission(sender,"fullrender")) {
+                if (args.length > 1) {
+                    for (int i = 1; i < args.length; i++) {
+                        int dot = args[i].indexOf(":");
+                        String wname = args[i];
+                        String map = null;
+                        if(dot >= 0) {
+                            wname = args[i].substring(0, dot);
+                            map = args[i].substring(dot+1);
+                        }
+                        mapManager.renderZoomOut(sender, wname, map);
+                    }
+                } else if (player != null) {
+                    DynmapLocation loc = player.getLocation();
+                    if(loc != null)
+                        mapManager.renderZoomOut(sender, loc.world, null);
+                } else {
+                    sender.sendMessage("World name is required");
+                }
             } else if (c.equals("cancelrender") && checkPlayerPermission(sender,"cancelrender")) {
                 if (args.length > 1) {
                     for (int i = 1; i < args.length; i++) {
@@ -2048,7 +2070,7 @@ public class DynmapCore implements DynmapCommonAPI {
                         .filter(name -> name.startsWith(arg))
                         .collect(Collectors.toList());
             }
-        } else if (subcommand.equals("fullrender") && checkPlayerPermission(sender, "fullrender")) {
+        } else if ((subcommand.equals("fullrender") || subcommand.equals("zoomrender")) && checkPlayerPermission(sender, "fullrender")) {
             List<String> suggestions = getWorldSuggestions(args[args.length - 1]); //World suggestions
             suggestions.addAll(getMapSuggestions(args[args.length - 1])); //world:map suggestions
 
@@ -2058,7 +2080,7 @@ public class DynmapCore implements DynmapCommonAPI {
             }
 
             //Add resume if previous argument wasn't resume
-            if ("resume".startsWith(args[args.length - 1])
+            if (subcommand.equals("fullrender") && "resume".startsWith(args[args.length - 1])
                     && (args.length == 2 || !args[args.length - 2].equals("resume"))) {
                 suggestions.add("resume");
             }

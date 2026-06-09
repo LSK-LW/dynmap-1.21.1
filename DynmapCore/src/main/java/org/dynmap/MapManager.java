@@ -1519,6 +1519,61 @@ public class MapManager {
         return (rndr != null) && (rndr.rendertype.equals(RENDERTYPE_FULLRENDER) || rndr.rendertype.equals(RENDERTYPE_RADIUSRENDER));
     }
 
+    public void renderZoomOut(final DynmapCommandSender sender, final String wname, final String mapname) {
+        final DynmapWorld world = getWorld(wname);
+        if(world == null) {
+            sender.sendMessage("World '" + wname + "' not defined/loaded");
+            return;
+        }
+        final ArrayList<MapType> maps = new ArrayList<MapType>();
+        if(mapname != null) {
+            for(MapType mt : world.maps) {
+                if(mt.getName().equals(mapname)) {
+                    maps.add(mt);
+                    break;
+                }
+            }
+            if(maps.isEmpty()) {
+                sender.sendMessage("Map '" + mapname + "' not defined on world '" + wname + "'");
+                return;
+            }
+        }
+        else {
+            maps.addAll(world.maps);
+        }
+        if(maps.isEmpty()) {
+            sender.sendMessage("World '" + wname + "' has no maps configured");
+            return;
+        }
+        sender.sendMessage("Zoom render scan queued for world '" + wname + "'" + ((mapname != null) ? (", map '" + mapname + "'") : "") + ".");
+        scheduleDelayedJob(new Runnable() {
+            public void run() {
+                final AtomicInteger cnt = new AtomicInteger(0);
+                final MapStorage ms = world.getMapStorage();
+                try {
+                    for(final MapType map : maps) {
+                        ms.enumMapBaseTiles(world, map, new MapStorageBaseTileEnumCB() {
+                            @Override
+                            public void tileFound(MapStorageTile tile, MapType.ImageEncoding enc) {
+                                tile.enqueueZoomOutUpdate();
+                                cnt.incrementAndGet();
+                            }
+                        }, new MapStorageTileSearchEndCB() {
+                            @Override
+                            public void searchEnded() {
+                            }
+                        });
+                    }
+                    world.freshenZoomOutFiles();
+                    sender.sendMessage("Zoom render completed for world '" + wname + "'" + ((mapname != null) ? (", map '" + mapname + "'") : "") + ": " + cnt.get() + " base tiles scanned.");
+                } catch (Exception e) {
+                    sender.sendMessage("Zoom render failed for world '" + wname + "'" + ((mapname != null) ? (", map '" + mapname + "'") : "") + ".");
+                    Log.severe("Zoom render error for world '" + wname + "'", e);
+                }
+            }
+        }, 0);
+    }
+
     private void savePending(DynmapWorld w, boolean keepQueue) {
         List<MapTile> mt = tileQueue.popAll();
         File f = new File(core.getDataFolder(), w.getName() + ".pending");
