@@ -1593,8 +1593,8 @@ public class MapManager {
                                     }
                                     int queued = countZoomOutInvalid(world, maps);
                                     Log.info("Zoom render partial processing started for world '" + wname + "', map '" + map.getName() + "': " + mcnt + " base tiles scanned, " + queued + " zoom-out tiles queued");
-                                    world.freshenZoomOutFiles();
-                                    Log.info("Zoom render partial processing complete for world '" + wname + "', map '" + map.getName() + "': " + countZoomOutInvalid(world, maps) + " zoom-out tiles still queued");
+                                    int processed = world.freshenZoomOutFiles();
+                                    Log.info("Zoom render partial processing complete for world '" + wname + "', map '" + map.getName() + "': processed=" + processed + ", " + countZoomOutInvalid(world, maps) + " zoom-out tiles still queued");
                                 }
                             }
                         }, new MapStorageTileSearchEndCB() {
@@ -1609,10 +1609,10 @@ public class MapManager {
                     }
                     int before = countZoomOutInvalid(world, maps);
                     Log.info("Zoom render processing started for " + target + ": " + totalCount.get() + " base tiles scanned, " + before + " zoom-out tiles queued");
-                    world.freshenZoomOutFiles();
+                    int processed = world.freshenZoomOutFiles();
                     int after = countZoomOutInvalid(world, maps);
-                    Log.info("Zoom render processing complete for " + target + ": " + totalCount.get() + " base tiles scanned, " + after + " zoom-out tiles still queued");
-                    sender.sendMessage("Zoom render completed for " + target + ": " + totalCount.get() + " base tiles scanned, " + before + " zoom-out tiles queued, " + after + " still queued.");
+                    Log.info("Zoom render processing complete for " + target + ": " + totalCount.get() + " base tiles scanned, processed=" + processed + ", " + after + " zoom-out tiles still queued");
+                    sender.sendMessage("Zoom render completed for " + target + ": " + totalCount.get() + " base tiles scanned, " + before + " zoom-out tiles queued, " + processed + " processed, " + after + " still queued.");
                 } catch (ZoomRenderAbortedException e) {
                     sender.sendMessage("Zoom render aborted for " + target + " because a full or radius render became active.");
                 } catch (Exception e) {

@@ -106,21 +106,32 @@ public abstract class DynmapWorld {
         }
     }
          
-    public void freshenZoomOutFiles() {
+    public int freshenZoomOutFiles() {
         MapTypeState.ZoomOutCoord c = new MapTypeState.ZoomOutCoord();
+        int processed = 0;
+        long lastLog = System.currentTimeMillis();
+        Log.info("Zoom-out freshen started for world '" + getName() + "'");
         for (MapTypeState mts : mapstate) {
-            if (cancelled) return;
+            if (cancelled) return processed;
             MapType mt = mts.type;
             MapType.ImageVariant var[] = mt.getVariants();
             mts.startZoomOutIter(); // Start iterator
             while (mts.nextZoomOutInv(c)) {
-                if(cancelled) return;
+                if(cancelled) return processed;
+                processed++;
+                long now = System.currentTimeMillis();
+                if ((processed % 100) == 0 || (now - lastLog) > 30000) {
+                    Log.info("Zoom-out freshen progress for world '" + getName() + "', map '" + mt.getName() + "': processed=" + processed + ", tile=" + c.x + "," + c.y + ", zoom=" + c.zoomlevel);
+                    lastLog = now;
+                }
                 for (int varIdx = 0; varIdx < var.length; varIdx++) {
                     MapStorageTile tile = storage.getTile(this, mt, c.x, c.y, c.zoomlevel, var[varIdx]);
                     processZoomFile(mts, tile, varIdx == 0);
                 }
             }
         }
+        Log.info("Zoom-out freshen finished for world '" + getName() + "': processed=" + processed);
+        return processed;
     }
     
     public void cancelZoomOutFreshen() {
