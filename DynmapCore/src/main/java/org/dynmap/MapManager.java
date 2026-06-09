@@ -1601,7 +1601,7 @@ public class MapManager {
         int cnt = 0;
         for(MapTypeState mts : world.mapstate) {
             if(maps.contains(mts.type)) {
-                cnt += mts.getInvCount();
+                cnt += mts.getZoomOutInvCount();
             }
         }
         return cnt;

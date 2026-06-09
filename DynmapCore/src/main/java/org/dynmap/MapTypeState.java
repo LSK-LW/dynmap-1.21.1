@@ -190,6 +190,22 @@ public class MapTypeState {
             return invTiles.countFlags();
         }
     }
+    public int getZoomOutInvCount() {
+        int cnt = 0;
+        synchronized(invTileLock) {
+            for (TileFlags tf : zoomOutInv) {
+                if (tf != null) {
+                    cnt += tf.countFlags();
+                }
+            }
+            for (TileFlags tf : zoomOutInvAccum) {
+                if (tf != null) {
+                    cnt += tf.countFlags();
+                }
+            }
+        }
+        return cnt;
+    }
     public void clear() {
         synchronized(invTileLock) {
             invTiles.clear();
