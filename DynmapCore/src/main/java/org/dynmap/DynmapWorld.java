@@ -308,6 +308,7 @@ public abstract class DynmapWorld {
                         mostRecentTimestamp = Math.max(mostRecentTimestamp, tr.lastModified);
                     } catch (IOException iox) {
                         // Broken file - zap it
+                        Log.info("Zoom-out child missing: reason=decode-error, child=" + tile1.getURI() + ", error=" + iox.getMessage());
                         tile1.delete();
                     }
                     if((im != null) && (im.getWidth() >= width) && (im.getHeight() >= height)) {
@@ -349,6 +350,7 @@ public abstract class DynmapWorld {
                     else {
                         zoomOutMissingCount++;
                         missingRequiredTile = true;
+                        Log.info("Zoom-out child missing: reason=" + ((im == null) ? "decode-null" : ("bad-size-" + im.getWidth() + "x" + im.getHeight())) + ", child=" + tile1.getURI() + ", expected-at-least=" + width + "x" + height);
                         if (tile1.map.getImageFormat().getEncoding() == ImageEncoding.JPG) {
                             Arrays.fill(argb, tile1.map.getBackgroundARGB(tile1.var));
                         }
@@ -361,6 +363,7 @@ public abstract class DynmapWorld {
                 else {
                     zoomOutMissingCount++;
                     missingRequiredTile = true;
+                    Log.info("Zoom-out child missing: reason=read-null, child=" + tile1.getURI() + ", parent=" + tile.getURI());
                     if (tile1.map.getImageFormat().getEncoding() == ImageEncoding.JPG) {
                         Arrays.fill(argb, tile1.map.getBackgroundARGB(tile1.var));
                     }
