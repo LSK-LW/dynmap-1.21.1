@@ -5,6 +5,15 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.dynmap.MapType.ImageEncoding;
 import org.dynmap.hdmap.TexturePack;
@@ -31,6 +40,17 @@ public abstract class DynmapWorld {
     private int zoomOutReadHitCount = 0;
     private int zoomOutMissingCount = 0;
     private int zoomOutWriteFailCount = 0;
+    private static final int MANUAL_ZOOM_FILE_TIMEOUT_MS = 20000;
+    private static final AtomicInteger zoomOutWorkerId = new AtomicInteger(0);
+    private static final ExecutorService zoomOutIOExecutor = Executors.newCachedThreadPool(new ThreadFactory() {
+        @Override
+        public Thread newThread(Runnable r) {
+            Thread t = new Thread(r);
+            t.setDaemon(true);
+            t.setName("Dynmap ZoomOut IO " + zoomOutWorkerId.incrementAndGet());
+            return t;
+        }
+    });
 
 
     public UpdateQueue updates = new UpdateQueue();
@@ -176,7 +196,12 @@ public abstract class DynmapWorld {
                     }
                     for (int varIdx = 0; varIdx < var.length; varIdx++) {
                         MapStorageTile tile = storage.getTile(this, mt, c.x, c.y, c.zoomlevel, var[varIdx]);
-                        processZoomFile(mts, tile, varIdx == 0);
+                        if ("manual".equals(source)) {
+                            processZoomFileWithTimeout(mts, tile, varIdx == 0);
+                        }
+                        else {
+                            processZoomFile(mts, tile, varIdx == 0, false);
+                        }
                     }
                     if (totalProcessed >= maxTiles) {
                         break;
@@ -204,7 +229,34 @@ public abstract class DynmapWorld {
 
     private static final int[] stepseq = { 3, 1, 2, 0 };
 
-    private void processZoomFile(MapTypeState mts, MapStorageTile tile, boolean firstVariant) {
+    private void processZoomFileWithTimeout(final MapTypeState mts, final MapStorageTile tile, final boolean firstVariant) {
+        Future<?> future = zoomOutIOExecutor.submit(new Runnable() {
+            @Override
+            public void run() {
+                processZoomFile(mts, tile, firstVariant, true);
+            }
+        });
+        try {
+            future.get(MANUAL_ZOOM_FILE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException tx) {
+            future.cancel(true);
+            zoomOutWriteFailCount++;
+            Log.info("Zoom-out tile timed out and was skipped: uri=" + tile.getURI() + ", timeoutMs=" + MANUAL_ZOOM_FILE_TIMEOUT_MS);
+        } catch (CancellationException cx) {
+            zoomOutWriteFailCount++;
+            Log.info("Zoom-out tile cancelled: uri=" + tile.getURI());
+        } catch (InterruptedException ix) {
+            future.cancel(true);
+            Thread.currentThread().interrupt();
+            zoomOutWriteFailCount++;
+            Log.info("Zoom-out tile interrupted: uri=" + tile.getURI());
+        } catch (ExecutionException ex) {
+            zoomOutWriteFailCount++;
+            Log.severe("Zoom-out tile failed: " + tile.getURI(), ex.getCause());
+        }
+    }
+
+    private void processZoomFile(MapTypeState mts, MapStorageTile tile, boolean firstVariant, boolean traceManual) {
         long mostRecentTimestamp = 0;
         int step = 1 << tile.zoom;
         MapStorageTile ztile = tile.getZoomOutTile();
@@ -230,16 +282,28 @@ public abstract class DynmapWorld {
             if (tile1 == null) continue;
             tile1.getReadLock();
             zoomOutReadAttemptCount++;
+            if (traceManual) {
+                Log.info("Zoom-out child read start: source=manual, parent=" + tile.getURI() + ", child=" + tile1.getURI());
+            }
             if (firstVariant) { // We're handling this one - but only clear on first variant (so that we don't miss updates later)
                 mts.clearZoomOutInv(tile1.x, tile1.y, tile1.zoom);
             }
             try {
                 MapStorageTile.TileRead tr = tile1.read();
+                if (traceManual) {
+                    Log.info("Zoom-out child read done: source=manual, child=" + tile1.getURI() + ", hit=" + (tr != null));
+                }
                 if (tr != null) {
                     zoomOutReadHitCount++;
                     BufferedImage im = null;
                     try {
+                        if (traceManual) {
+                            Log.info("Zoom-out child decode start: source=manual, child=" + tile1.getURI());
+                        }
                         im = ImageIOManager.imageIODecode(tr);
+                        if (traceManual) {
+                            Log.info("Zoom-out child decode done: source=manual, child=" + tile1.getURI() + ", image=" + ((im == null) ? "null" : (im.getWidth() + "x" + im.getHeight())));
+                        }
                         // Only consider the timestamp when the tile exists and isn't broken
                         mostRecentTimestamp = Math.max(mostRecentTimestamp, tr.lastModified);
                     } catch (IOException iox) {
@@ -333,6 +397,9 @@ public abstract class DynmapWorld {
                 }
             }
             else /* if (!ztile.matchesHashCode(crc)) */ {
+                if (traceManual) {
+                    Log.info("Zoom-out tile write start: source=manual, uri=" + ztile.getURI());
+                }
                 if (ztile.write(crc, zIm, (mostRecentTimestamp == 0)? System.currentTimeMillis() : mostRecentTimestamp)) {
                     zoomOutWriteCount++;
                     if ((zoomOutWriteCount <= 10) || ((zoomOutWriteCount % 100) == 0)) {
@@ -344,6 +411,9 @@ public abstract class DynmapWorld {
                 else {
                     zoomOutWriteFailCount++;
                     Log.info("Zoom-out tile write skipped/failed: " + ztile.getURI());
+                }
+                if (traceManual) {
+                    Log.info("Zoom-out tile write done: source=manual, uri=" + ztile.getURI());
                 }
             }
         } finally {
