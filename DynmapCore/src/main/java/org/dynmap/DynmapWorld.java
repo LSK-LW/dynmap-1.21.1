@@ -27,6 +27,10 @@ public abstract class DynmapWorld {
     public List<MapTypeState> mapstate = new ArrayList<MapTypeState>();
     private int zoomOutWriteCount = 0;
     private int zoomOutBlankCount = 0;
+    private int zoomOutReadAttemptCount = 0;
+    private int zoomOutReadHitCount = 0;
+    private int zoomOutMissingCount = 0;
+    private int zoomOutWriteFailCount = 0;
 
 
     public UpdateQueue updates = new UpdateQueue();
@@ -128,6 +132,12 @@ public abstract class DynmapWorld {
         int totalProcessed = 0;
         int pass = 0;
         long lastLog = System.currentTimeMillis();
+        int startReadAttempts = zoomOutReadAttemptCount;
+        int startReadHits = zoomOutReadHitCount;
+        int startMissing = zoomOutMissingCount;
+        int startWrites = zoomOutWriteCount;
+        int startWriteFails = zoomOutWriteFailCount;
+        int startBlanks = zoomOutBlankCount;
         Log.info("Zoom-out freshen started for world '" + getName() + "': pending=" + pending);
         while ((pending > 0) && (pass < maxPasses)) {
             int passProcessed = 0;
@@ -154,10 +164,10 @@ public abstract class DynmapWorld {
                 }
             }
             pending = getZoomOutInvCount();
-            Log.info("Zoom-out freshen pass complete for world '" + getName() + "': pass=" + pass + ", processed=" + passProcessed + ", remaining=" + pending);
+            Log.info("Zoom-out freshen pass complete for world '" + getName() + "': pass=" + pass + ", processed=" + passProcessed + ", remaining=" + pending + ", reads=" + (zoomOutReadAttemptCount - startReadAttempts) + ", readHits=" + (zoomOutReadHitCount - startReadHits) + ", missing=" + (zoomOutMissingCount - startMissing) + ", writes=" + (zoomOutWriteCount - startWrites) + ", writeFails=" + (zoomOutWriteFailCount - startWriteFails) + ", blankDeletes=" + (zoomOutBlankCount - startBlanks));
             if (passProcessed == 0) break;
         }
-        Log.info("Zoom-out freshen finished for world '" + getName() + "': processed=" + totalProcessed + ", remaining=" + pending);
+        Log.info("Zoom-out freshen finished for world '" + getName() + "': processed=" + totalProcessed + ", remaining=" + pending + ", reads=" + (zoomOutReadAttemptCount - startReadAttempts) + ", readHits=" + (zoomOutReadHitCount - startReadHits) + ", missing=" + (zoomOutMissingCount - startMissing) + ", writes=" + (zoomOutWriteCount - startWrites) + ", writeFails=" + (zoomOutWriteFailCount - startWriteFails) + ", blankDeletes=" + (zoomOutBlankCount - startBlanks));
         return totalProcessed;
     }
     
@@ -196,12 +206,14 @@ public abstract class DynmapWorld {
             MapStorageTile tile1 = storage.getTile(this, tile.map, tx1, ty1, tile.zoom, tile.var);
             if (tile1 == null) continue;
             tile1.getReadLock();
+            zoomOutReadAttemptCount++;
             if (firstVariant) { // We're handling this one - but only clear on first variant (so that we don't miss updates later)
                 mts.clearZoomOutInv(tile1.x, tile1.y, tile1.zoom);
             }
             try {
                 MapStorageTile.TileRead tr = tile1.read();
                 if (tr != null) {
+                    zoomOutReadHitCount++;
                     BufferedImage im = null;
                     try {
                         im = ImageIOManager.imageIODecode(tr);
@@ -248,6 +260,7 @@ public abstract class DynmapWorld {
                         blank = false;
                     }
                     else {
+                        zoomOutMissingCount++;
                         missingRequiredTile = true;
                         if (tile1.map.getImageFormat().getEncoding() == ImageEncoding.JPG) {
                             Arrays.fill(argb, tile1.map.getBackgroundARGB(tile1.var));
@@ -259,6 +272,7 @@ public abstract class DynmapWorld {
                     }
                 }
                 else {
+                    zoomOutMissingCount++;
                     missingRequiredTile = true;
                     if (tile1.map.getImageFormat().getEncoding() == ImageEncoding.JPG) {
                         Arrays.fill(argb, tile1.map.getBackgroundARGB(tile1.var));
@@ -305,6 +319,7 @@ public abstract class DynmapWorld {
                     enqueueZoomOutUpdate(ztile);
                 }
                 else {
+                    zoomOutWriteFailCount++;
                     Log.info("Zoom-out tile write skipped/failed: " + ztile.getURI());
                 }
             }
