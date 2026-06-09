@@ -167,7 +167,7 @@ public abstract class DynmapWorld {
                     totalProcessed++;
                     passProcessed++;
                     long now = System.currentTimeMillis();
-                    if ("manual".equals(source)) {
+                    if ("manual".equals(source) && ((totalProcessed <= 10) || ((totalProcessed % 100) == 0))) {
                         Log.info("Zoom-out freshen tile start for world '" + getName() + "', map '" + mt.getName() + "': source=" + source + ", pass=" + pass + ", processed=" + totalProcessed + ", tile=" + c.x + "," + c.y + ", zoom=" + c.zoomlevel);
                     }
                     if ((totalProcessed % 100) == 0 || (now - lastLog) > 30000) {
