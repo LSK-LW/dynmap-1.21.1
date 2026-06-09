@@ -1520,10 +1520,25 @@ public class MapManager {
         return (rndr != null) && (rndr.rendertype.equals(RENDERTYPE_FULLRENDER) || rndr.rendertype.equals(RENDERTYPE_RADIUSRENDER));
     }
 
+    private String getActiveRenderStatus(String wname) {
+        synchronized(lock) {
+            FullWorldRenderState rndr = active_renders.get(wname);
+            if(rndr == null) {
+                return "none";
+            }
+            return rndr.rendertype + ", map=" + ((rndr.map == null) ? "<none>" : rndr.map.getName()) + ", queue=" + rndr.renderQueue.size() + ", rendered=" + rndr.rendercnt;
+        }
+    }
+
     public void renderZoomOut(final DynmapCommandSender sender, final String wname, final String mapname) {
         final DynmapWorld world = getWorld(wname);
         if(world == null) {
             sender.sendMessage("World '" + wname + "' not defined/loaded");
+            return;
+        }
+        if(isFullOrRadiusRenderActive(wname)) {
+            sender.sendMessage("Zoom render for world '" + wname + "' cannot start while a full or radius render is active.");
+            Log.info("Zoom render rejected for world '" + wname + "' because active render status is: " + getActiveRenderStatus(wname));
             return;
         }
         final ArrayList<MapType> maps = new ArrayList<MapType>();
@@ -1548,12 +1563,17 @@ public class MapManager {
         }
         final String target = "world '" + wname + "'" + ((mapname != null) ? (", map '" + mapname + "'") : "");
         sender.sendMessage("Zoom render scan queued for " + target + ".");
-        Log.info("Zoom render scan queued for " + target);
+        Log.info("Zoom render scan queued for " + target + "; active render status=" + getActiveRenderStatus(wname));
         scheduleDelayedJob(new Runnable() {
             public void run() {
                 final AtomicInteger totalCount = new AtomicInteger(0);
                 final MapStorage ms = world.getMapStorage();
                 try {
+                    if(isFullOrRadiusRenderActive(wname)) {
+                        Log.info("Zoom render aborted for " + target + " before scan because active render status is: " + getActiveRenderStatus(wname));
+                        sender.sendMessage("Zoom render aborted for " + target + " because a full or radius render became active.");
+                        return;
+                    }
                     for(final MapType map : maps) {
                         final AtomicInteger mapCount = new AtomicInteger(0);
                         Log.info("Zoom render scanning base tiles for world '" + wname + "', map '" + map.getName() + "'");
@@ -1567,6 +1587,10 @@ public class MapManager {
                                     Log.info("Zoom render scanned " + mcnt + " base tiles for world '" + wname + "', map '" + map.getName() + "'");
                                 }
                                 if((mcnt % ZOOM_RENDER_BATCH_SIZE) == 0) {
+                                    if(isFullOrRadiusRenderActive(wname)) {
+                                        Log.info("Zoom render aborted for " + target + " during partial processing because active render status is: " + getActiveRenderStatus(wname));
+                                        throw new ZoomRenderAbortedException();
+                                    }
                                     int queued = countZoomOutInvalid(world, maps);
                                     Log.info("Zoom render partial processing started for world '" + wname + "', map '" + map.getName() + "': " + mcnt + " base tiles scanned, " + queued + " zoom-out tiles queued");
                                     world.freshenZoomOutFiles();
@@ -1589,12 +1613,18 @@ public class MapManager {
                     int after = countZoomOutInvalid(world, maps);
                     Log.info("Zoom render processing complete for " + target + ": " + totalCount.get() + " base tiles scanned, " + after + " zoom-out tiles still queued");
                     sender.sendMessage("Zoom render completed for " + target + ": " + totalCount.get() + " base tiles scanned, " + before + " zoom-out tiles queued, " + after + " still queued.");
+                } catch (ZoomRenderAbortedException e) {
+                    sender.sendMessage("Zoom render aborted for " + target + " because a full or radius render became active.");
                 } catch (Exception e) {
                     sender.sendMessage("Zoom render failed for " + target + ".");
                     Log.severe("Zoom render error for world '" + wname + "'", e);
                 }
             }
         }, 0);
+    }
+
+    private static class ZoomRenderAbortedException extends RuntimeException {
+        private static final long serialVersionUID = 1L;
     }
 
     private int countZoomOutInvalid(DynmapWorld world, List<MapType> maps) {
