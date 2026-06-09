@@ -248,6 +248,9 @@ public class MapTypeState {
     // Start zoom out iteration (stash and reset accumulator)
     public void startZoomOutIter() {
         synchronized(invTileLock) {
+            if (zoomOutInvIter != null) {
+                return;
+            }
             ArrayList<TileFlags> tmplist = zoomOutInv;
             zoomOutInv = zoomOutInvAccum;
             for (int i = 0; i < tmplist.size(); i++) {

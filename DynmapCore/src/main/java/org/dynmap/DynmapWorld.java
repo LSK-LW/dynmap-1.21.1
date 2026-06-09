@@ -129,6 +129,10 @@ public abstract class DynmapWorld {
     }
 
     public synchronized int freshenZoomOutFiles(int maxPasses, String source) {
+        return freshenZoomOutFiles(maxPasses, source, Integer.MAX_VALUE);
+    }
+
+    public synchronized int freshenZoomOutFiles(int maxPasses, String source, int maxTiles) {
         int pending = getZoomOutInvCount();
         if (pending == 0) {
             return 0;
@@ -143,17 +147,23 @@ public abstract class DynmapWorld {
         int startWriteFails = zoomOutWriteFailCount;
         int startBlanks = zoomOutBlankCount;
         Log.info("Zoom-out freshen started for world '" + getName() + "': source=" + source + ", pending=" + pending);
-        while ((pending > 0) && (pass < maxPasses)) {
+        while ((pending > 0) && (pass < maxPasses) && (totalProcessed < maxTiles)) {
             int passProcessed = 0;
             MapTypeState.ZoomOutCoord c = new MapTypeState.ZoomOutCoord();
             pass++;
             for (MapTypeState mts : mapstate) {
-                if (cancelled) return totalProcessed;
+                if (cancelled) {
+                    Log.info("Zoom-out freshen cancelled for world '" + getName() + "': source=" + source + ", processed=" + totalProcessed + ", remaining=" + getZoomOutInvCount());
+                    return totalProcessed;
+                }
                 MapType mt = mts.type;
                 MapType.ImageVariant var[] = mt.getVariants();
                 mts.startZoomOutIter(); // Start iterator
                 while (mts.nextZoomOutInv(c)) {
-                    if(cancelled) return totalProcessed;
+                    if(cancelled) {
+                        Log.info("Zoom-out freshen cancelled for world '" + getName() + "': source=" + source + ", processed=" + totalProcessed + ", remaining=" + getZoomOutInvCount());
+                        return totalProcessed;
+                    }
                     totalProcessed++;
                     passProcessed++;
                     long now = System.currentTimeMillis();
@@ -165,6 +175,12 @@ public abstract class DynmapWorld {
                         MapStorageTile tile = storage.getTile(this, mt, c.x, c.y, c.zoomlevel, var[varIdx]);
                         processZoomFile(mts, tile, varIdx == 0);
                     }
+                    if (totalProcessed >= maxTiles) {
+                        break;
+                    }
+                }
+                if (totalProcessed >= maxTiles) {
+                    break;
                 }
             }
             pending = getZoomOutInvCount();
