@@ -524,7 +524,7 @@ public class AWSS3MapStorage extends MapStorage {
                 }
                 if (result.isTruncated()) {	// If more, build continuiation request
                     req = ListObjectsV2Request.builder().bucketName(bucketname)
-                            .prefix(basekey).maxKeys(1000).continuationToken(result.getContinuationToken()).build();
+                            .prefix(basekey).maxKeys(1000).continuationToken(result.getNextContinuationToken()).build();
                 }
                 else {	// Else, we're done
                     done = true;
@@ -596,7 +596,7 @@ public class AWSS3MapStorage extends MapStorage {
                 }
                 if (result.isTruncated()) {	// If more, build continuiation request
                     req = ListObjectsV2Request.builder().bucketName(bucketname)
-                            .prefix(basekey).delimiter("").maxKeys(1000).continuationToken(result.getContinuationToken()).encodingType("url").requestPayer("requester").build();
+                            .prefix(basekey).delimiter("").maxKeys(1000).continuationToken(result.getNextContinuationToken()).encodingType("url").requestPayer("requester").build();
                 }
                 else {	// Else, we're done
                     done = true;
