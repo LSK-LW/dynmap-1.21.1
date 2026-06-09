@@ -580,12 +580,6 @@ public class MapManager {
                                 }
                             }
                         }
-                        if(rendertype.equals(RENDERTYPE_FULLRENDER) || rendertype.equals(RENDERTYPE_RADIUSRENDER)) {
-                            for(MapType mt : map.getMapsSharingRender(world)) {
-                                world.enqueueZoomOutUpdate(mt);
-                            }
-                            scheduleDelayedJob(new DoZoomOutProcessing(), 1000);
-                        }
                     }                	
                     found.clear();
                     rendered.clear();

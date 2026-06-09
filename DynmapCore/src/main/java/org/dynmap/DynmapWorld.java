@@ -105,15 +105,6 @@ public abstract class DynmapWorld {
             mts.setZoomOutInv(tile.x, tile.y, tile.zoom);
         }
     }
-
-    public void enqueueZoomOutUpdate(MapType map) {
-        storage.enumMapBaseTiles(this, map, new org.dynmap.storage.MapStorageBaseTileEnumCB() {
-            @Override
-            public void tileFound(MapStorageTile tile, ImageEncoding enc) {
-                tile.enqueueZoomOutUpdate();
-            }
-        }, null);
-    }
          
     public void freshenZoomOutFiles() {
         MapTypeState.ZoomOutCoord c = new MapTypeState.ZoomOutCoord();
@@ -150,6 +141,8 @@ public abstract class DynmapWorld {
         BufferedImage zIm = null;
         DynmapBufferedImage kzIm = null;
         boolean blank = true;
+        boolean missingRequiredTile = false;
+        boolean deferIncompleteZoomOut = (MapManager.mapman != null) && MapManager.mapman.isFullOrRadiusRenderActive(getName());
         int[] argb = new int[width*height];
         int tx = ztile.x;
         int ty = ztile.y;
@@ -217,6 +210,7 @@ public abstract class DynmapWorld {
                         blank = false;
                     }
                     else {
+                        missingRequiredTile = true;
                         if (tile1.map.getImageFormat().getEncoding() == ImageEncoding.JPG) {
                             Arrays.fill(argb, tile1.map.getBackgroundARGB(tile1.var));
                         }
@@ -227,6 +221,7 @@ public abstract class DynmapWorld {
                     }
                 }
                 else {
+                    missingRequiredTile = true;
                     if (tile1.map.getImageFormat().getEncoding() == ImageEncoding.JPG) {
                         Arrays.fill(argb, tile1.map.getBackgroundARGB(tile1.var));
                     }
@@ -241,6 +236,11 @@ public abstract class DynmapWorld {
             if(doblit) {
                 zIm.setRGB(((i>>1) != 0)?0:width/2, (i & 1) * height/2, width/2, height/2, argb, 0, width);
             }
+        }
+        if (missingRequiredTile && deferIncompleteZoomOut) {
+            enqueueZoomOutUpdate(tile);
+            DynmapBufferedImage.freeBufferedImage(kzIm);
+            return;
         }
         ztile.getWriteLock();
         try {

@@ -16,7 +16,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.dynmap.DynmapCore;
 import org.dynmap.DynmapWorld;
 import org.dynmap.Log;
-import org.dynmap.MapManager;
 import org.dynmap.MapType;
 import org.dynmap.MapType.ImageEncoding;
 import org.dynmap.MapType.ImageVariant;
@@ -241,7 +240,7 @@ public class AWSS3MapStorage extends MapStorage {
             }
 
             // 只有写入成功才入队 zoomout
-            if (done && zoom == 0 && !MapManager.mapman.isFullOrRadiusRenderActive(world.getName())) {
+            if (done && zoom == 0) {
                 world.enqueueZoomOutUpdate(this);
             }
             return done;
