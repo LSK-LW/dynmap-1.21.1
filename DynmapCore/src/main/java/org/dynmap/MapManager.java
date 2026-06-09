@@ -1567,13 +1567,17 @@ public class MapManager {
             return;
         }
         final String target = "world '" + wname + "'" + ((mapname != null) ? (", map '" + mapname + "'") : "");
+        if(!manualZoomRenders.add(wname)) {
+            sender.sendMessage("Zoom render for world '" + wname + "' is already active.");
+            Log.info("Zoom render rejected for " + target + " because another manual zoom render is active.");
+            return;
+        }
         sender.sendMessage("Zoom render scan queued for " + target + ".");
         Log.info("Zoom render scan queued for " + target + "; active render status=" + getActiveRenderStatus(wname));
         scheduleDelayedJob(new Runnable() {
             public void run() {
                 final AtomicInteger totalCount = new AtomicInteger(0);
                 final MapStorage ms = world.getMapStorage();
-                manualZoomRenders.add(wname);
                 try {
                     if(isFullOrRadiusRenderActive(wname)) {
                         Log.info("Zoom render aborted for " + target + " before scan because active render status is: " + getActiveRenderStatus(wname));
@@ -1599,7 +1603,7 @@ public class MapManager {
                                     }
                                     int queued = countZoomOutInvalid(world, maps);
                                     Log.info("Zoom render partial processing started for world '" + wname + "', map '" + map.getName() + "': " + mcnt + " base tiles scanned, " + queued + " zoom-out tiles queued");
-                                    int processed = world.freshenZoomOutFiles(ZOOM_RENDER_MAX_FRESHEN_PASSES);
+                                    int processed = world.freshenZoomOutFiles(ZOOM_RENDER_MAX_FRESHEN_PASSES, "manual");
                                     Log.info("Zoom render partial processing complete for world '" + wname + "', map '" + map.getName() + "': processed=" + processed + ", " + countZoomOutInvalid(world, maps) + " zoom-out tiles still queued");
                                 }
                             }
@@ -1615,7 +1619,7 @@ public class MapManager {
                     }
                     int before = countZoomOutInvalid(world, maps);
                     Log.info("Zoom render processing started for " + target + ": " + totalCount.get() + " base tiles scanned, " + before + " zoom-out tiles queued");
-                    int processed = world.freshenZoomOutFiles(ZOOM_RENDER_MAX_FRESHEN_PASSES);
+                    int processed = world.freshenZoomOutFiles(ZOOM_RENDER_MAX_FRESHEN_PASSES, "manual");
                     int after = countZoomOutInvalid(world, maps);
                     Log.info("Zoom render processing complete for " + target + ": " + totalCount.get() + " base tiles scanned, processed=" + processed + ", " + after + " zoom-out tiles still queued");
                     sender.sendMessage("Zoom render completed for " + target + ": " + totalCount.get() + " base tiles scanned, " + before + " zoom-out tiles queued, " + processed + " processed, " + after + " still queued.");

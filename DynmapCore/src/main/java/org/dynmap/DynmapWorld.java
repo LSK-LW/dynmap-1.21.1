@@ -121,10 +121,14 @@ public abstract class DynmapWorld {
     }
          
     public int freshenZoomOutFiles() {
-        return freshenZoomOutFiles(1);
+        return freshenZoomOutFiles(1, "timer");
     }
 
     public synchronized int freshenZoomOutFiles(int maxPasses) {
+        return freshenZoomOutFiles(maxPasses, "direct");
+    }
+
+    public synchronized int freshenZoomOutFiles(int maxPasses, String source) {
         int pending = getZoomOutInvCount();
         if (pending == 0) {
             return 0;
@@ -138,7 +142,7 @@ public abstract class DynmapWorld {
         int startWrites = zoomOutWriteCount;
         int startWriteFails = zoomOutWriteFailCount;
         int startBlanks = zoomOutBlankCount;
-        Log.info("Zoom-out freshen started for world '" + getName() + "': pending=" + pending);
+        Log.info("Zoom-out freshen started for world '" + getName() + "': source=" + source + ", pending=" + pending);
         while ((pending > 0) && (pass < maxPasses)) {
             int passProcessed = 0;
             MapTypeState.ZoomOutCoord c = new MapTypeState.ZoomOutCoord();
@@ -154,7 +158,7 @@ public abstract class DynmapWorld {
                     passProcessed++;
                     long now = System.currentTimeMillis();
                     if ((totalProcessed % 100) == 0 || (now - lastLog) > 30000) {
-                        Log.info("Zoom-out freshen progress for world '" + getName() + "', map '" + mt.getName() + "': pass=" + pass + ", processed=" + totalProcessed + ", tile=" + c.x + "," + c.y + ", zoom=" + c.zoomlevel);
+                        Log.info("Zoom-out freshen progress for world '" + getName() + "', map '" + mt.getName() + "': source=" + source + ", pass=" + pass + ", processed=" + totalProcessed + ", tile=" + c.x + "," + c.y + ", zoom=" + c.zoomlevel);
                         lastLog = now;
                     }
                     for (int varIdx = 0; varIdx < var.length; varIdx++) {
@@ -164,10 +168,10 @@ public abstract class DynmapWorld {
                 }
             }
             pending = getZoomOutInvCount();
-            Log.info("Zoom-out freshen pass complete for world '" + getName() + "': pass=" + pass + ", processed=" + passProcessed + ", remaining=" + pending + ", reads=" + (zoomOutReadAttemptCount - startReadAttempts) + ", readHits=" + (zoomOutReadHitCount - startReadHits) + ", missing=" + (zoomOutMissingCount - startMissing) + ", writes=" + (zoomOutWriteCount - startWrites) + ", writeFails=" + (zoomOutWriteFailCount - startWriteFails) + ", blankDeletes=" + (zoomOutBlankCount - startBlanks));
+            Log.info("Zoom-out freshen pass complete for world '" + getName() + "': source=" + source + ", pass=" + pass + ", processed=" + passProcessed + ", remaining=" + pending + ", reads=" + (zoomOutReadAttemptCount - startReadAttempts) + ", readHits=" + (zoomOutReadHitCount - startReadHits) + ", missing=" + (zoomOutMissingCount - startMissing) + ", writes=" + (zoomOutWriteCount - startWrites) + ", writeFails=" + (zoomOutWriteFailCount - startWriteFails) + ", blankDeletes=" + (zoomOutBlankCount - startBlanks));
             if (passProcessed == 0) break;
         }
-        Log.info("Zoom-out freshen finished for world '" + getName() + "': processed=" + totalProcessed + ", remaining=" + pending + ", reads=" + (zoomOutReadAttemptCount - startReadAttempts) + ", readHits=" + (zoomOutReadHitCount - startReadHits) + ", missing=" + (zoomOutMissingCount - startMissing) + ", writes=" + (zoomOutWriteCount - startWrites) + ", writeFails=" + (zoomOutWriteFailCount - startWriteFails) + ", blankDeletes=" + (zoomOutBlankCount - startBlanks));
+        Log.info("Zoom-out freshen finished for world '" + getName() + "': source=" + source + ", processed=" + totalProcessed + ", remaining=" + pending + ", reads=" + (zoomOutReadAttemptCount - startReadAttempts) + ", readHits=" + (zoomOutReadHitCount - startReadHits) + ", missing=" + (zoomOutMissingCount - startMissing) + ", writes=" + (zoomOutWriteCount - startWrites) + ", writeFails=" + (zoomOutWriteFailCount - startWriteFails) + ", blankDeletes=" + (zoomOutBlankCount - startBlanks));
         return totalProcessed;
     }
     

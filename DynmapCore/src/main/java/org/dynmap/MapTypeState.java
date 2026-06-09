@@ -262,8 +262,7 @@ public class MapTypeState {
         synchronized(invTileLock) {
             // Try existing iterator
             if (zoomOutInvIter != null) {
-                if (zoomOutInvIter.hasNext()) {
-                    zoomOutInvIter.next(coord);
+                if (zoomOutInvIter.next(coord)) {
                     coord.zoomlevel = zoomOutInvIterLevel;
                     coord.x = coord.x << zoomOutInvIterLevel;
                     coord.y = coord.y << zoomOutInvIterLevel;
@@ -275,8 +274,7 @@ public class MapTypeState {
                 TileFlags tf = zoomOutInv.get(zoomOutInvIterLevel);
                 if (tf != null) {
                     zoomOutInvIter = tf.getIterator();
-                    if (zoomOutInvIter.hasNext()) {
-                        zoomOutInvIter.next(coord);
+                    if (zoomOutInvIter.next(coord)) {
                         coord.zoomlevel = zoomOutInvIterLevel;
                         coord.x = coord.x << zoomOutInvIterLevel;
                         coord.y = coord.y << zoomOutInvIterLevel;
