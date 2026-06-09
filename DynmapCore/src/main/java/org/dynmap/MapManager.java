@@ -69,6 +69,7 @@ public class MapManager {
     private HashMap<String, String> blockalias = new HashMap<String, String>();
     private static final int ZOOM_RENDER_BATCH_SIZE = 250000;
     private static final int ZOOM_RENDER_MAX_FRESHEN_PASSES = 32;
+    private static final int ZOOM_RENDER_MAX_DRAIN_ROUNDS = 1024;
     private Set<String> manualZoomRenders = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
     
     private boolean pausefullrenders = false;
@@ -1603,7 +1604,7 @@ public class MapManager {
                                     }
                                     int queued = countZoomOutInvalid(world, maps);
                                     Log.info("Zoom render partial processing started for world '" + wname + "', map '" + map.getName() + "': " + mcnt + " base tiles scanned, " + queued + " zoom-out tiles queued");
-                                    int processed = world.freshenZoomOutFiles(ZOOM_RENDER_MAX_FRESHEN_PASSES, "manual");
+                                    int processed = drainManualZoomOutQueue(sender, world, maps, target, "partial");
                                     Log.info("Zoom render partial processing complete for world '" + wname + "', map '" + map.getName() + "': processed=" + processed + ", " + countZoomOutInvalid(world, maps) + " zoom-out tiles still queued");
                                 }
                             }
@@ -1619,7 +1620,7 @@ public class MapManager {
                     }
                     int before = countZoomOutInvalid(world, maps);
                     Log.info("Zoom render processing started for " + target + ": " + totalCount.get() + " base tiles scanned, " + before + " zoom-out tiles queued");
-                    int processed = world.freshenZoomOutFiles(ZOOM_RENDER_MAX_FRESHEN_PASSES, "manual");
+                    int processed = drainManualZoomOutQueue(sender, world, maps, target, "final");
                     int after = countZoomOutInvalid(world, maps);
                     Log.info("Zoom render processing complete for " + target + ": " + totalCount.get() + " base tiles scanned, processed=" + processed + ", " + after + " zoom-out tiles still queued");
                     sender.sendMessage("Zoom render completed for " + target + ": " + totalCount.get() + " base tiles scanned, " + before + " zoom-out tiles queued, " + processed + " processed, " + after + " still queued.");
@@ -1633,6 +1634,35 @@ public class MapManager {
                 }
             }
         }, 0);
+    }
+
+    private int drainManualZoomOutQueue(DynmapCommandSender sender, DynmapWorld world, List<MapType> maps, String target, String phase) {
+        int totalProcessed = 0;
+        for(int round = 1; round <= ZOOM_RENDER_MAX_DRAIN_ROUNDS; round++) {
+            if(isFullOrRadiusRenderActive(world.getName())) {
+                Log.info("Zoom render aborted for " + target + " during " + phase + " drain because active render status is: " + getActiveRenderStatus(world.getName()));
+                throw new ZoomRenderAbortedException();
+            }
+            int before = countZoomOutInvalid(world, maps);
+            if(before == 0) {
+                return totalProcessed;
+            }
+            world.activateZoomOutFreshen();
+            int processed = world.freshenZoomOutFiles(ZOOM_RENDER_MAX_FRESHEN_PASSES, "manual");
+            totalProcessed += processed;
+            int after = countZoomOutInvalid(world, maps);
+            Log.info("Zoom render drain round for " + target + ": phase=" + phase + ", round=" + round + ", before=" + before + ", processed=" + processed + ", after=" + after);
+            if(processed == 0) {
+                sender.sendMessage("Zoom render for " + target + " stopped with " + after + " zoom-out tiles still queued because no progress was made.");
+                return totalProcessed;
+            }
+        }
+        int remaining = countZoomOutInvalid(world, maps);
+        if(remaining > 0) {
+            sender.sendMessage("Zoom render for " + target + " reached the manual drain round limit with " + remaining + " zoom-out tiles still queued.");
+            Log.info("Zoom render drain limit reached for " + target + ": remaining=" + remaining);
+        }
+        return totalProcessed;
     }
 
     private static class ZoomRenderAbortedException extends RuntimeException {

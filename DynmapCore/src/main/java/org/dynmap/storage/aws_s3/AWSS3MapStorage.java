@@ -12,6 +12,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.dynmap.DynmapCore;
 import org.dynmap.DynmapWorld;
@@ -49,6 +50,7 @@ import io.github.linktosriram.s3lite.http.urlconnection.URLConnectionSdkHttpClie
 public class AWSS3MapStorage extends MapStorage {
     private static final int MAX_S3_RETRIES = 6;
     private ConcurrentHashMap<String, Long> tileHashCache = new ConcurrentHashMap<>();
+    private AtomicInteger zoomWriteLogCount = new AtomicInteger();
 
     public class StorageTile extends MapStorageTile {
         private final String baseKey;
@@ -214,7 +216,10 @@ public class AWSS3MapStorage extends MapStorage {
                         s3.putObject(req, RequestBody.fromBytes(payload));
                         AWSS3MapStorage.this.tileHashCache.put(baseKey, hash);
                         if (zoom > 0) {
-                            Log.info("[S3] ZOOM WRITE OK key=" + baseKey + " bytes=" + payload.length);
+                            int zcnt = AWSS3MapStorage.this.zoomWriteLogCount.incrementAndGet();
+                            if ((zcnt <= 10) || ((zcnt % 100) == 0)) {
+                                Log.info("[S3] ZOOM WRITE OK count=" + zcnt + " key=" + baseKey + " bytes=" + payload.length);
+                            }
                         }
                     }
                     done = true;
