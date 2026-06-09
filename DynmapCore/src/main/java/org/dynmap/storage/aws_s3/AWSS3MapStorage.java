@@ -453,8 +453,10 @@ public class AWSS3MapStorage extends MapStorage {
         int objectCount = 0;
         int parsedCount = 0;
         int baseCount = 0;
+        int zoomCount = 0;
+        String enumMode = (cbBase != null) ? "base" : ((cb != null) ? "all" : "scan");
         try {
-            Log.info("[S3] ENUM start bucket=" + bucketname + " prefix=" + basekey);
+            Log.info("[S3] ENUM start mode=" + enumMode + " bucket=" + bucketname + " prefix=" + basekey);
             s3 = getConnection();
             while (!done) {
                 ListObjectsV2Response result = s3.listObjectsV2(req);
@@ -502,6 +504,9 @@ public class AWSS3MapStorage extends MapStorage {
                             int y = Integer.parseInt(coord[1]);
                             MapStorageTile t = new StorageTile(world, map, x, y, zoom, var);
                             parsedCount++;
+                            if (zoom > 0) {
+                                zoomCount++;
+                            }
                             if (cb != null)
                                 cb.tileFound(t, fmt);
                             if (cbBase != null && zoom == 0) { // ← 注意这里用 zoom==0 而不是 t.zoom
@@ -515,7 +520,7 @@ public class AWSS3MapStorage extends MapStorage {
                     }
                 }
                 if ((pageCount % 10) == 0 || result.isTruncated() == false) {
-                    Log.info("[S3] ENUM progress bucket=" + bucketname + " prefix=" + basekey + " pages=" + pageCount + " objects=" + objectCount + " parsed=" + parsedCount + " base=" + baseCount);
+                    Log.info("[S3] ENUM progress mode=" + enumMode + " bucket=" + bucketname + " prefix=" + basekey + " pages=" + pageCount + " objects=" + objectCount + " parsed=" + parsedCount + " base=" + baseCount + " zoom=" + zoomCount);
                 }
                 if (result.isTruncated()) {	// If more, build continuiation request
                     req = ListObjectsV2Request.builder().bucketName(bucketname)
