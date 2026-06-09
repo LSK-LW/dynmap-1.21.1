@@ -50,8 +50,13 @@ import io.github.linktosriram.s3lite.http.urlconnection.URLConnectionSdkHttpClie
 public class AWSS3MapStorage extends MapStorage {
     private static final int MAX_S3_RETRIES = 6;
     private static final int S3_HTTP_TIMEOUT_MS = 10000;
+    private static final String JAXB_NO_OPTIMIZATION_PROPERTY = "org.glassfish.jaxb.runtime.v2.runtime.reflect.opt.OptimizedAccessorFactory.noOptimization";
     private ConcurrentHashMap<String, Long> tileHashCache = new ConcurrentHashMap<>();
     private AtomicInteger zoomWriteLogCount = new AtomicInteger();
+
+    static {
+        System.setProperty(JAXB_NO_OPTIMIZATION_PROPERTY, "true");
+    }
 
     public class StorageTile extends MapStorageTile {
         private final String baseKey;
