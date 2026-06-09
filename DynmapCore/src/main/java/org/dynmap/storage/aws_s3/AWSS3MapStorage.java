@@ -164,6 +164,10 @@ public class AWSS3MapStorage extends MapStorage {
                     return null; // 文件不存在，正常情况
                 } catch (StorageShutdownException x) {
                     break;
+                } catch (LinkageError x) {
+                    Log.severe("[S3] READ linkage failure: " + baseKey + " error=" + x.getMessage(), x);
+                    discardConnection = true;
+                    break;
                 } catch (Exception x) {
                     retries--;
                     discardConnection = isRetryableS3Error(x);
@@ -226,6 +230,10 @@ public class AWSS3MapStorage extends MapStorage {
                     done = true;
 
                 } catch (StorageShutdownException x) {
+                    break;
+                } catch (LinkageError x) {
+                    Log.severe("[S3] WRITE linkage failure: " + baseKey + " error=" + x.getMessage(), x);
+                    discardConnection = true;
                     break;
                 } catch (Exception x) {
                     retries--;
